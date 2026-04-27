@@ -17,9 +17,11 @@ function NotePanel({ notebook }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [viewingNote, setViewingNote] = useState(null);
   const menuRef = useRef(null);
   const formRef = useRef(null);
   const editFormRef = useRef(null);
+  const viewFormRef = useRef(null);
 
   useEffect(() => {
     fetchNotes();
@@ -34,6 +36,7 @@ function NotePanel({ notebook }) {
     setSelectedIds([]);
     setShowBulkMove(false);
     setFullscreen(false);
+    setViewingNote(null);
   }, [notebook.id]);
 
   useEffect(() => {
@@ -59,6 +62,14 @@ function NotePanel({ notebook }) {
   const toggleEditFullscreen = () => {
     if (!document.fullscreenElement) {
       editFormRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const toggleViewFullscreen = () => {
+    if (!document.fullscreenElement) {
+      viewFormRef.current?.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
@@ -195,35 +206,37 @@ function NotePanel({ notebook }) {
       {!showForm && (
         <div className="flex items-center gap-3 mb-4">
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => { setViewingNote(null); setShowForm(true); }}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors duration-150 shadow-sm shrink-0"
           >
             <span className="text-lg leading-none">+</span> Create Note
           </button>
 
-          <div className="flex flex-1 items-center border border-gray-200 bg-gray-50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
-            <select
-              value={searchField}
-              onChange={(e) => setSearchField(e.target.value)}
-              className="bg-gray-100 border-r border-gray-200 text-xs font-medium text-gray-500 px-3 py-2.5 focus:outline-none cursor-pointer"
-            >
-              <option value="both">Both</option>
-              <option value="title">Title</option>
-              <option value="content">Content</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Search notes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none"
-            />
-            {search && (
-              <button onClick={() => setSearch("")} className="px-3 text-gray-400 hover:text-gray-600 text-sm">
-                ✕
-              </button>
-            )}
-          </div>
+          {!viewingNote && (
+            <div className="flex flex-1 items-center border border-gray-200 bg-gray-50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
+              <select
+                value={searchField}
+                onChange={(e) => setSearchField(e.target.value)}
+                className="bg-gray-100 border-r border-gray-200 text-xs font-medium text-gray-500 px-3 py-2.5 focus:outline-none cursor-pointer"
+              >
+                <option value="both">Both</option>
+                <option value="title">Title</option>
+                <option value="content">Content</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Search notes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="px-3 text-gray-400 hover:text-gray-600 text-sm">
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -353,8 +366,51 @@ function NotePanel({ notebook }) {
         </form>
       )}
 
+      {/* Note view */}
+      {!showForm && viewingNote && (
+        <div
+          ref={viewFormRef}
+          className={fullscreen ? "flex flex-col h-full bg-white p-8" : "flex flex-col flex-1 min-h-0"}
+        >
+          <div className={`flex items-center gap-3 shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200" : "mb-4"}`}>
+            <button
+              onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setViewingNote(null); }}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
+            >
+              ← Back
+            </button>
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={toggleViewFullscreen}
+                className={`flex items-center gap-2 font-medium transition rounded-xl ${
+                  fullscreen
+                    ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
+                    : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
+                }`}
+              >
+                {fullscreen ? (
+                  <><span className="text-base">✕</span> Exit Fullscreen</>
+                ) : (
+                  <><span className="text-sm">⛶</span> Expand</>
+                )}
+              </button>
+              <button
+                onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(viewingNote); setViewingNote(null); }}
+                className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
+              >
+                ✏️ Edit
+              </button>
+            </div>
+          </div>
+          <h2 className={`font-bold text-gray-800 mb-3 shrink-0 ${fullscreen ? "text-2xl" : "text-xl"}`}>{viewingNote.title}</h2>
+          <p className="text-sm text-gray-600 whitespace-pre-wrap flex-1 overflow-y-auto">
+            {viewingNote.content || <span className="text-gray-400 italic">No content</span>}
+          </p>
+        </div>
+      )}
+
       {/* Notes list */}
-      {!showForm && (
+      {!showForm && !viewingNote && (
         <div className="flex flex-col gap-3" ref={selectedIds.length === 0 ? menuRef : null}>
 
           {notes.length === 0 ? (
@@ -445,7 +501,7 @@ function NotePanel({ notebook }) {
                       />
                     )}
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewingNote(note)}>
                       <h3 className="font-semibold text-gray-800 text-sm">{note.title}</h3>
                       {note.content && (
                         <p className="text-sm text-gray-500 mt-1 line-clamp-2 whitespace-pre-wrap">
