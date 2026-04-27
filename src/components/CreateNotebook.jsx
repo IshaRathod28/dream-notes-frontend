@@ -18,7 +18,7 @@ function CreateNotebook({ onCreated }) {
 
   return (
     <div>
-      <h2 className="text-base font-bold text-gray-800 mb-4 uppercase tracking-wide">
+      <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-4 uppercase tracking-wide">
         + New Notebook
       </h2>
 
@@ -28,7 +28,7 @@ function CreateNotebook({ onCreated }) {
           placeholder="Enter notebook name..."
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full border border-gray-200 bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+          className="w-full border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
         />
         <button
           type="submit"
