@@ -105,9 +105,11 @@ function NotePanel({ notebook }) {
   };
 
   const toggleSelect = (noteId) => {
-    setSelectedIds((prev) =>
-      prev.includes(noteId) ? prev.filter((id) => id !== noteId) : [...prev, noteId]
-    );
+    setSelectedIds((prev) => {
+      const next = prev.includes(noteId) ? prev.filter((id) => id !== noteId) : [...prev, noteId];
+      if (next.length === 0) setSelectionMode(false);
+      return next;
+    });
   };
 
   const toggleSelectAll = () => {
