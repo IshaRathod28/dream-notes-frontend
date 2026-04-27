@@ -18,3 +18,9 @@ export const updateNotebook = async (id, name) => {
 export const deleteNotebook = async (id) => {
   await api.delete(`/notebooks/${id}`);
 };
+
+export const bulkDeleteNotebooks = async (notebookIds) => {
+  await api.delete("/notebooks/bulk_destroy", {
+    data: { notebook_ids: notebookIds },
+  });
+};
