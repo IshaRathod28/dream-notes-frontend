@@ -19,6 +19,7 @@ function NotePanel({ notebook }) {
   const [fullscreen, setFullscreen] = useState(false);
   const menuRef = useRef(null);
   const formRef = useRef(null);
+  const editFormRef = useRef(null);
 
   useEffect(() => {
     fetchNotes();
@@ -50,6 +51,14 @@ function NotePanel({ notebook }) {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       formRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const toggleEditFullscreen = () => {
+    if (!document.fullscreenElement) {
+      editFormRef.current?.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
@@ -361,22 +370,47 @@ function NotePanel({ notebook }) {
             filteredNotes.map((note) =>
               editingNote?.id === note.id ? (
                 /* Edit mode */
-                <div key={note.id} className="border border-blue-300 rounded-2xl p-4 bg-blue-50">
+                <div
+                  key={note.id}
+                  ref={editFormRef}
+                  className={fullscreen ? "flex flex-col h-full bg-white p-8" : "border border-blue-300 rounded-2xl p-4 bg-blue-50"}
+                >
+                  <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200" : "mb-3"}`}>
+                    <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
+                      <span className={fullscreen ? "text-2xl" : "text-sm"}>✍️</span>
+                      Edit Note
+                    </p>
+                    <button
+                      type="button"
+                      onClick={toggleEditFullscreen}
+                      className={`flex items-center gap-2 font-medium transition rounded-xl ${
+                        fullscreen
+                          ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
+                          : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
+                      }`}
+                    >
+                      {fullscreen ? (
+                        <><span className="text-base">✕</span> Exit Fullscreen</>
+                      ) : (
+                        <><span className="text-sm">⛶</span> Expand</>
+                      )}
+                    </button>
+                  </div>
                   <input
                     autoFocus
                     value={editingNote.title}
                     onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
-                    className="w-full font-semibold text-gray-800 bg-transparent border-b border-blue-300 pb-1 mb-3 focus:outline-none text-sm"
+                    className={`w-full bg-transparent border-b border-blue-300 pb-1 mb-3 focus:outline-none ${fullscreen ? "text-lg font-bold text-gray-800" : "font-semibold text-gray-800 text-sm"}`}
                   />
                   <textarea
                     value={editingNote.content}
                     onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
-                    rows={4}
-                    className="w-full text-sm text-gray-600 bg-transparent focus:outline-none resize-none"
+                    className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "flex-1 text-base text-gray-700" : "text-sm text-gray-600"}`}
+                    rows={fullscreen ? undefined : 4}
                   />
-                  <div className="flex gap-2 mt-3 justify-end">
+                  <div className="flex gap-2 mt-3 justify-end shrink-0">
                     <button
-                      onClick={() => setEditingNote(null)}
+                      onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(null); }}
                       className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg transition"
                     >
                       Cancel
