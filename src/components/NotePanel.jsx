@@ -196,13 +196,13 @@ function NotePanel({ notebook }) {
     <div className="flex flex-col h-full overflow-hidden">
 
       {/* Sticky top: notebook header + toolbar + bulk bar */}
-      <div className="shrink-0 px-8 pt-8 pb-2 bg-white">
+      <div className="shrink-0 px-8 pt-8 pb-2 bg-white dark:bg-gray-950">
 
       {/* Notebook header */}
-      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
         <span className="text-2xl">📓</span>
-        <h2 className="text-xl font-bold text-gray-800 truncate">{notebook.name}</h2>
-        <span className="ml-auto text-xs text-gray-400 shrink-0">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">{notebook.name}</h2>
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 shrink-0">
           {notes.length} note{notes.length !== 1 ? "s" : ""}
         </span>
       </div>
@@ -218,11 +218,11 @@ function NotePanel({ notebook }) {
           </button>
 
           {!viewingNote && (
-            <div className="flex flex-1 items-center border border-gray-200 bg-gray-50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
+            <div className="flex flex-1 items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
               <select
                 value={searchField}
                 onChange={(e) => setSearchField(e.target.value)}
-                className="bg-gray-100 border-r border-gray-200 text-xs font-medium text-gray-500 px-3 py-2.5 focus:outline-none cursor-pointer"
+                className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-3 py-2.5 focus:outline-none cursor-pointer"
               >
                 <option value="both">Both</option>
                 <option value="title">Title</option>
@@ -233,10 +233,10 @@ function NotePanel({ notebook }) {
                 placeholder="Search notes..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none"
+                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
               />
               {search && (
-                <button onClick={() => setSearch("")} className="px-3 text-gray-400 hover:text-gray-600 text-sm">
+                <button onClick={() => setSearch("")} className="px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
                   ✕
                 </button>
               )}
@@ -247,7 +247,7 @@ function NotePanel({ notebook }) {
 
       {/* Bulk action bar */}
       {!showForm && selectedIds.length > 0 && (
-        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl" ref={menuRef}>
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl" ref={menuRef}>
           <input
             type="checkbox"
             checked={allSelected}
@@ -255,7 +255,7 @@ function NotePanel({ notebook }) {
             className="w-4 h-4 accent-blue-600 cursor-pointer shrink-0"
             title={allSelected ? "Deselect all" : "Select all"}
           />
-          <span className="text-sm font-semibold text-blue-700">
+          <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
             {selectedIds.length} selected
           </span>
 
@@ -265,17 +265,17 @@ function NotePanel({ notebook }) {
               <div className="relative">
                 <button
                   onClick={() => setShowBulkMove((v) => !v)}
-                  className="flex items-center gap-1.5 text-sm bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-1.5 rounded-lg transition"
+                  className="flex items-center gap-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-1.5 rounded-lg transition"
                 >
                   📂 Move to {showBulkMove ? "▲" : "▼"}
                 </button>
                 {showBulkMove && (
-                  <div className="absolute left-0 top-9 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[160px]">
+                  <div className="absolute left-0 top-9 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[160px]">
                     {otherNotebooks.map((nb) => (
                       <button
                         key={nb.id}
                         onClick={() => handleBulkMove(nb.id)}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400 flex items-center gap-2"
                       >
                         📓 <span className="truncate">{nb.name}</span>
                       </button>
@@ -296,7 +296,7 @@ function NotePanel({ notebook }) {
             {/* Cancel */}
             <button
               onClick={() => { setSelectionMode(false); setSelectedIds([]); setShowBulkMove(false); }}
-              className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg transition"
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
             >
               Cancel
             </button>
@@ -305,10 +305,10 @@ function NotePanel({ notebook }) {
       )}
 
       {!showForm && viewingNote && (
-        <div className={`flex items-center gap-3 shrink-0 pb-4 border-b border-gray-100 ${fullscreen ? "mb-6" : "mb-4"}`}>
+        <div className={`flex items-center gap-3 shrink-0 pb-4 border-b border-gray-100 dark:border-gray-800 ${fullscreen ? "mb-6" : "mb-4"}`}>
           <button
             onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setViewingNote(null); }}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
+            className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 transition"
           >
             ← Back
           </button>
@@ -317,8 +317,8 @@ function NotePanel({ notebook }) {
               onClick={toggleViewFullscreen}
               className={`flex items-center gap-2 font-medium transition rounded-xl ${
                 fullscreen
-                  ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
-                  : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
+                  ? "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2"
+                  : "text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5"
               }`}
             >
               {fullscreen ? (
@@ -338,7 +338,7 @@ function NotePanel({ notebook }) {
       )}
 
       {!showForm && viewingNote && !fullscreen && (
-        <h2 className="text-xl font-bold text-gray-800 px-0 pb-3">{viewingNote.title}</h2>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 px-0 pb-3">{viewingNote.title}</h2>
       )}
 
       </div>
@@ -350,12 +350,12 @@ function NotePanel({ notebook }) {
           onSubmit={handleCreate}
           className={
             fullscreen
-              ? "flex flex-col h-full bg-white p-8"
-              : "flex flex-col flex-1 border border-blue-100 bg-blue-50 rounded-2xl p-4 min-h-0"
+              ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8"
+              : "flex flex-col flex-1 border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 min-h-0"
           }
         >
-          <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200" : "mb-3"}`}>
-            <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
+          <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200 dark:border-gray-800" : "mb-3"}`}>
+            <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800 dark:text-gray-100" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
               <span className={fullscreen ? "text-2xl" : "text-sm"}>✍️</span>
               New Note
             </p>
@@ -364,8 +364,8 @@ function NotePanel({ notebook }) {
               onClick={toggleFullscreen}
               className={`flex items-center gap-2 font-medium transition rounded-xl ${
                 fullscreen
-                  ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
-                  : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
+                  ? "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2"
+                  : "text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5"
               }`}
             >
               {fullscreen ? (
@@ -383,19 +383,19 @@ function NotePanel({ notebook }) {
               placeholder="Note title..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className={`w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition shrink-0 ${fullscreen ? "text-lg text-gray-800" : "text-sm text-gray-700"}`}
+              className={`w-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition shrink-0 ${fullscreen ? "text-lg text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
             />
             <textarea
               placeholder="Write your note here..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className={`flex-1 w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none min-h-[150px] ${fullscreen ? "text-base text-gray-800" : "text-sm text-gray-700"}`}
+              className={`flex-1 w-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none min-h-[150px] ${fullscreen ? "text-base text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
             />
             <div className="flex gap-2 justify-end mt-1 shrink-0">
               <button
                 type="button"
                 onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setShowForm(false); setTitle(""); setContent(""); }}
-                className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-xl transition"
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-4 py-2 rounded-xl transition"
               >
                 Cancel
               </button>
@@ -412,19 +412,19 @@ function NotePanel({ notebook }) {
 
       {/* Note view */}
       {!showForm && viewingNote && (
-        <div ref={viewFormRef} className={fullscreen ? "flex flex-col h-full bg-white p-8" : "pt-4"}>
+        <div ref={viewFormRef} className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "pt-4"}>
           {fullscreen && (
-            <div className="flex items-center gap-3 shrink-0 mb-6 pb-4 border-b border-gray-200">
+            <div className="flex items-center gap-3 shrink-0 mb-6 pb-4 border-b border-gray-200 dark:border-gray-800">
               <button
                 onClick={() => { document.exitFullscreen(); setViewingNote(null); }}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
+                className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 transition"
               >
                 ← Back
               </button>
               <div className="ml-auto flex gap-2">
                 <button
                   onClick={toggleViewFullscreen}
-                  className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2 font-medium transition rounded-xl"
+                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 font-medium transition rounded-xl"
                 >
                   <span className="text-base">✕</span> Exit Fullscreen
                 </button>
@@ -437,9 +437,9 @@ function NotePanel({ notebook }) {
               </div>
             </div>
           )}
-          {fullscreen && <h2 className="text-2xl font-bold text-gray-800 mb-3">{viewingNote.title}</h2>}
-          <p className={`text-gray-600 whitespace-pre-wrap ${fullscreen ? "text-base flex-1 overflow-y-auto" : "text-sm"}`}>
-            {viewingNote.content ? viewingNote.content : <span className="text-gray-400 italic">No content</span>}
+          {fullscreen && <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-3">{viewingNote.title}</h2>}
+          <p className={`text-gray-600 dark:text-gray-300 whitespace-pre-wrap ${fullscreen ? "text-base flex-1 overflow-y-auto" : "text-sm"}`}>
+            {viewingNote.content ? viewingNote.content : <span className="text-gray-400 dark:text-gray-500 italic">No content</span>}
           </p>
         </div>
       )}
@@ -451,11 +451,11 @@ function NotePanel({ notebook }) {
           {notes.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-4xl mb-3">📝</p>
-              <p className="text-gray-400 text-sm">No notes yet. Create your first one above!</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">No notes yet. Create your first one above!</p>
             </div>
           ) : filteredNotes.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-sm">No notes match "{search}"</p>
+              <p className="text-gray-400 dark:text-gray-500 text-sm">No notes match "{search}"</p>
             </div>
           ) : (
             filteredNotes.map((note) =>
@@ -464,10 +464,10 @@ function NotePanel({ notebook }) {
                 <div
                   key={note.id}
                   ref={editFormRef}
-                  className={fullscreen ? "flex flex-col h-full bg-white p-8" : "border border-blue-300 rounded-2xl p-4 bg-blue-50"}
+                  className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "border border-blue-300 dark:border-blue-700 rounded-2xl p-4 bg-blue-50 dark:bg-blue-900/20"}
                 >
-                  <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200" : "mb-3"}`}>
-                    <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
+                  <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200 dark:border-gray-800" : "mb-3"}`}>
+                    <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800 dark:text-gray-100" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
                       <span className={fullscreen ? "text-2xl" : "text-sm"}>✍️</span>
                       Edit Note
                     </p>
@@ -476,8 +476,8 @@ function NotePanel({ notebook }) {
                       onClick={toggleEditFullscreen}
                       className={`flex items-center gap-2 font-medium transition rounded-xl ${
                         fullscreen
-                          ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
-                          : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
+                          ? "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2"
+                          : "text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5"
                       }`}
                     >
                       {fullscreen ? (
@@ -491,18 +491,18 @@ function NotePanel({ notebook }) {
                     autoFocus
                     value={editingNote.title}
                     onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
-                    className={`w-full bg-transparent border-b border-blue-300 pb-1 mb-3 focus:outline-none ${fullscreen ? "text-lg font-bold text-gray-800" : "font-semibold text-gray-800 text-sm"}`}
+                    className={`w-full bg-transparent border-b border-blue-300 dark:border-blue-600 pb-1 mb-3 focus:outline-none ${fullscreen ? "text-lg font-bold text-gray-800 dark:text-gray-100" : "font-semibold text-gray-800 dark:text-gray-100 text-sm"}`}
                   />
                   <textarea
                     value={editingNote.content}
                     onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
-                    className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "flex-1 text-base text-gray-700" : "text-sm text-gray-600"}`}
+                    className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "flex-1 text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
                     rows={fullscreen ? undefined : 4}
                   />
                   <div className="flex gap-2 mt-3 justify-end shrink-0">
                     <button
                       onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(null); }}
-                      className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg transition"
+                      className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
                     >
                       Cancel
                     </button>
@@ -520,8 +520,8 @@ function NotePanel({ notebook }) {
                   key={note.id}
                   className={`relative border rounded-2xl p-4 transition ${
                     selectedIds.includes(note.id)
-                      ? "border-blue-300 bg-blue-50"
-                      : "border-gray-100 hover:border-gray-200 hover:shadow-sm"
+                      ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -537,9 +537,9 @@ function NotePanel({ notebook }) {
                     )}
 
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewingNote(note)}>
-                      <h3 className="font-semibold text-gray-800 text-sm">{note.title}</h3>
+                      <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{note.title}</h3>
                       {note.content && (
-                        <p className="text-sm text-gray-500 mt-1 line-clamp-2 whitespace-pre-wrap">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 whitespace-pre-wrap">
                           {note.content}
                         </p>
                       )}
@@ -548,7 +548,7 @@ function NotePanel({ notebook }) {
                     {/* Three-dot button */}
                     <button
                       onClick={() => setOpenMenuId(openMenuId === note.id ? null : note.id)}
-                      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition shrink-0 text-base font-bold leading-none"
+                      className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition shrink-0 text-base font-bold leading-none"
                       title="More options"
                     >
                       ⋯
@@ -557,29 +557,29 @@ function NotePanel({ notebook }) {
 
                   {/* Dropdown menu */}
                   {openMenuId === note.id && (
-                    <div className="absolute right-4 top-10 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[180px]">
+                    <div className="absolute right-4 top-10 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[180px]">
                       <button
                         onClick={() => { setEditingNote(note); setOpenMenuId(null); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
                         ✏️ <span>Edit</span>
                       </button>
                       <button
                         onClick={() => { setSelectionMode(true); toggleSelect(note.id); setOpenMenuId(null); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
                         ☑️ <span>Select</span>
                       </button>
 
                       {otherNotebooks.length > 0 && (
                         <>
-                          <div className="border-t border-gray-100 my-1" />
+                          <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
                           <button
                             onClick={() => setShowMoveOptions((v) => !v)}
-                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between gap-2"
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between gap-2"
                           >
                             <span className="flex items-center gap-2">📂 Move to</span>
-                            <span className="text-gray-400 text-xs">{showMoveOptions ? "▲" : "▼"}</span>
+                            <span className="text-gray-400 dark:text-gray-500 text-xs">{showMoveOptions ? "▲" : "▼"}</span>
                           </button>
                           {showMoveOptions && (
                             <div className="px-3 pb-2 flex flex-col gap-0.5">
@@ -587,7 +587,7 @@ function NotePanel({ notebook }) {
                                 <button
                                   key={nb.id}
                                   onClick={() => handleMove(note.id, nb.id)}
-                                  className="w-full text-left text-xs text-gray-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg transition flex items-center gap-2"
+                                  className="w-full text-left text-xs text-gray-600 dark:text-gray-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-3 py-2 rounded-lg transition flex items-center gap-2"
                                 >
                                   📓 <span className="truncate">{nb.name}</span>
                                 </button>
@@ -597,10 +597,10 @@ function NotePanel({ notebook }) {
                         </>
                       )}
 
-                      <div className="border-t border-gray-100 my-1" />
+                      <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
                       <button
                         onClick={() => handleDelete(note.id)}
-                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
                       >
                         🗑️ <span>Delete</span>
                       </button>

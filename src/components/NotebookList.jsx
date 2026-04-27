@@ -98,13 +98,13 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
 
   return (
     <div ref={menuRef}>
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
         My Notebooks
       </p>
 
       {/* Bulk action bar */}
       {selectionMode && selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl">
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl">
           <input
             type="checkbox"
             checked={allSelected}
@@ -112,7 +112,7 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
             className="w-4 h-4 accent-blue-600 cursor-pointer shrink-0"
             title={allSelected ? "Deselect all" : "Select all"}
           />
-          <span className="text-xs font-semibold text-blue-700 flex-1">
+          <span className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex-1">
             {selectedIds.length} selected
           </span>
           <button
@@ -123,7 +123,7 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
           </button>
           <button
             onClick={cancelSelection}
-            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5 rounded-lg transition"
+            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1.5 rounded-lg transition"
           >
             Cancel
           </button>
@@ -138,10 +138,10 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
               onClick={() => !selectionMode && editingId !== notebook.id && onSelect(notebook)}
               className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition-colors duration-150 ${
                 selectedIds.includes(notebook.id)
-                  ? "bg-blue-50 border border-blue-100"
+                  ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-700"
                   : selectedId === notebook.id
-                  ? "bg-blue-50 border border-blue-100"
-                  : "hover:bg-gray-50"
+                  ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-700"
+                  : "hover:bg-gray-50 dark:hover:bg-gray-800"
               }`}
             >
               {/* Checkbox — only in selection mode */}
@@ -168,13 +168,13 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
                   }}
                   onBlur={() => handleEditSubmit(notebook.id)}
                   onClick={(e) => e.stopPropagation()}
-                  className="flex-1 text-sm border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="flex-1 text-sm border border-blue-300 dark:border-blue-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
               ) : (
                 <>
                   <span
                     className={`flex-1 text-sm font-medium truncate transition-colors duration-150 ${
-                      selectedId === notebook.id ? "text-blue-700" : "text-gray-700"
+                      selectedId === notebook.id ? "text-blue-700 dark:text-blue-400" : "text-gray-700 dark:text-gray-200"
                     }`}
                   >
                     {notebook.name}
@@ -187,7 +187,7 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
                         e.stopPropagation();
                         setOpenMenuId(openMenuId === notebook.id ? null : notebook.id);
                       }}
-                      className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition shrink-0 text-base font-bold leading-none"
+                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition shrink-0 text-base font-bold leading-none"
                       title="More options"
                     >
                       ⋯
@@ -196,23 +196,23 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
 
                   {/* Dropdown */}
                   {openMenuId === notebook.id && (
-                    <div className="absolute right-2 top-9 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[150px]">
+                    <div className="absolute right-2 top-9 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[150px]">
                       <button
                         onClick={(e) => handleEditStart(notebook, e)}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
                         ✏️ <span>Rename</span>
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); setSelectionMode(true); toggleSelect(notebook.id); setOpenMenuId(null); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
                         ☑️ <span>Select</span>
                       </button>
-                      <div className="border-t border-gray-100 my-1" />
+                      <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
                       <button
                         onClick={(e) => handleDelete(notebook, e)}
-                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
                       >
                         🗑️ <span>Delete</span>
                       </button>
@@ -224,7 +224,7 @@ function NotebookList({ selectedId, onSelect, onRefresh }) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-gray-400 italic px-1">No notebooks yet</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 italic px-1">No notebooks yet</p>
       )}
     </div>
   );
