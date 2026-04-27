@@ -260,25 +260,24 @@ function NotePanel({ notebook }) {
 
       {/* Create note form */}
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 border border-blue-100 bg-blue-50 rounded-2xl p-4">
+        <form onSubmit={handleCreate} className="flex flex-col flex-1 border border-blue-100 bg-blue-50 rounded-2xl p-4 min-h-0">
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">New Note</p>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 flex-1 min-h-0">
             <input
               autoFocus
               type="text"
               placeholder="Note title..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition shrink-0"
             />
             <textarea
               placeholder="Write your note here..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              rows={3}
-              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none"
+              className="flex-1 w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none min-h-[150px]"
             />
-            <div className="flex gap-2 justify-end mt-1">
+            <div className="flex gap-2 justify-end mt-1 shrink-0">
               <button
                 type="button"
                 onClick={() => { setShowForm(false); setTitle(""); setContent(""); }}
