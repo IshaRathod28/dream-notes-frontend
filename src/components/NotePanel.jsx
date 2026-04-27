@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes } from "../services/noteService";
+import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes, uploadImages, deleteImage } from "../services/noteService";
 import { getNotebooks } from "../services/notebookService";
 
 function NotePanel({ notebook }) {
@@ -22,6 +22,8 @@ function NotePanel({ notebook }) {
   const formRef = useRef(null);
   const editFormRef = useRef(null);
   const viewFormRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const editFileInputRef = useRef(null);
 
   useEffect(() => {
     fetchNotes();
@@ -187,6 +189,35 @@ function NotePanel({ notebook }) {
     } catch (error) {
       console.error("Failed to delete note:", error);
     }
+  };
+
+  const handleImageDelete = async (imageId, noteId) => {
+    try {
+      const updated = await deleteImage(notebook.id, noteId, imageId);
+      setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+      if (viewingNote?.id === updated.id) setViewingNote(updated);
+      if (editingNote?.id === updated.id) setEditingNote(updated);
+    } catch (err) {
+      console.error("Image delete failed:", err);
+    }
+  };
+
+  const handleImageUpload = async (files, noteId) => {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    try {
+      const updated = await uploadImages(notebook.id, noteId, imageFiles);
+      setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+      if (viewingNote?.id === updated.id) setViewingNote(updated);
+      if (editingNote?.id === updated.id) setEditingNote(updated);
+    } catch (err) {
+      console.error("Image upload failed:", err);
+    }
+  };
+
+  const handlePaste = (e, noteId) => {
+    const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith("image/"));
+    if (files.length) handleImageUpload(files, noteId);
   };
 
   const otherNotebooks = allNotebooks.filter((nb) => nb.id !== notebook.id);
@@ -412,7 +443,11 @@ function NotePanel({ notebook }) {
 
       {/* Note view */}
       {!showForm && viewingNote && (
-        <div ref={viewFormRef} className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "pt-4"}>
+        <div
+          ref={viewFormRef}
+          onPaste={(e) => handlePaste(e, viewingNote.id)}
+          className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "pt-4"}
+        >
           {fullscreen && (
             <div className="flex items-center gap-3 shrink-0 mb-6 pb-4 border-b border-gray-200 dark:border-gray-800">
               <button
@@ -438,9 +473,47 @@ function NotePanel({ notebook }) {
             </div>
           )}
           {fullscreen && <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-3">{viewingNote.title}</h2>}
-          <p className={`text-gray-600 dark:text-gray-300 whitespace-pre-wrap ${fullscreen ? "text-base flex-1 overflow-y-auto" : "text-sm"}`}>
+          <p className={`text-gray-600 dark:text-gray-300 whitespace-pre-wrap ${fullscreen ? "text-base" : "text-sm"}`}>
             {viewingNote.content ? viewingNote.content : <span className="text-gray-400 dark:text-gray-500 italic">No content</span>}
           </p>
+
+          {/* Images */}
+          {viewingNote.images?.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              {viewingNote.images.map((img) => (
+                <div key={img.id} className="relative group">
+                  <img
+                    src={img.url}
+                    alt={img.filename}
+                    className="rounded-xl w-full object-cover max-h-64 border border-gray-100 dark:border-gray-800"
+                  />
+                  <button
+                    onClick={() => handleImageDelete(img.id, viewingNote.id)}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                    title="Delete image"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upload button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-4 flex items-center gap-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition"
+          >
+            📎 Add Image
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => { handleImageUpload(e.target.files, viewingNote.id); e.target.value = ""; }}
+          />
         </div>
       )}
 
@@ -464,6 +537,7 @@ function NotePanel({ notebook }) {
                 <div
                   key={note.id}
                   ref={editFormRef}
+                  onPaste={(e) => handlePaste(e, note.id)}
                   className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "border border-blue-300 dark:border-blue-700 rounded-2xl p-4 bg-blue-50 dark:bg-blue-900/20"}
                 >
                   <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200 dark:border-gray-800" : "mb-3"}`}>
@@ -499,7 +573,45 @@ function NotePanel({ notebook }) {
                     className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "flex-1 text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
                     rows={fullscreen ? undefined : 4}
                   />
+                  {/* Images in edit mode */}
+                  {editingNote.images?.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      {editingNote.images.map((img) => (
+                        <div key={img.id} className="relative group">
+                          <img
+                            src={img.url}
+                            alt={img.filename}
+                            className="rounded-xl w-full object-cover max-h-48 border border-gray-100 dark:border-gray-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleImageDelete(img.id, note.id)}
+                            className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                            title="Delete image"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex gap-2 mt-3 justify-end shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="text-sm text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-1.5 rounded-lg transition mr-auto"
+                    >
+                      📎 Add Image
+                    </button>
+                    <input
+                      ref={editFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => { handleImageUpload(e.target.files, note.id); e.target.value = ""; }}
+                    />
                     <button
                       onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(null); }}
                       className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
