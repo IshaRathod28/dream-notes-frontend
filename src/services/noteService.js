@@ -39,3 +39,19 @@ export const bulkMoveNotes = async (notebookId, noteIds, targetNotebookId) => {
     target_notebook_id: targetNotebookId,
   });
 };
+
+export const deleteImage = async (notebookId, noteId, imageId) => {
+  const response = await api.delete(`/notebooks/${notebookId}/notes/${noteId}/delete_image`, {
+    data: { image_id: imageId },
+  });
+  return response.data;
+};
+
+export const uploadImages = async (notebookId, noteId, files) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("images[]", file));
+  const response = await api.post(`/notebooks/${notebookId}/notes/${noteId}/upload_images`, formData, {
+    headers: { "Content-Type": undefined },
+  });
+  return response.data;
+};
