@@ -193,7 +193,10 @@ function NotePanel({ notebook }) {
   const allSelected = filteredNotes.length > 0 && selectedIds.length === filteredNotes.length;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
+
+      {/* Sticky top: notebook header + toolbar + bulk bar */}
+      <div className="shrink-0 px-8 pt-8 pb-2 bg-white">
 
       {/* Notebook header */}
       <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
@@ -301,7 +304,46 @@ function NotePanel({ notebook }) {
         </div>
       )}
 
-      {/* Create note form — inline or fullscreen */}
+      {!showForm && viewingNote && (
+        <div className={`flex items-center gap-3 shrink-0 pb-4 border-b border-gray-100 ${fullscreen ? "mb-6" : "mb-4"}`}>
+          <button
+            onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setViewingNote(null); }}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
+          >
+            ← Back
+          </button>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={toggleViewFullscreen}
+              className={`flex items-center gap-2 font-medium transition rounded-xl ${
+                fullscreen
+                  ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
+                  : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
+              }`}
+            >
+              {fullscreen ? (
+                <><span className="text-base">✕</span> Exit Fullscreen</>
+              ) : (
+                <><span className="text-sm">⛶</span> Expand</>
+              )}
+            </button>
+            <button
+              onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(viewingNote); setViewingNote(null); }}
+              className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
+            >
+              ✏️ Edit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showForm && viewingNote && !fullscreen && (
+        <h2 className="text-xl font-bold text-gray-800 px-0 pb-3">{viewingNote.title}</h2>
+      )}
+
+      </div>
+      <div className="flex-1 overflow-y-auto px-8 pb-8">
+
       {showForm && (
         <form
           ref={formRef}
@@ -370,43 +412,34 @@ function NotePanel({ notebook }) {
 
       {/* Note view */}
       {!showForm && viewingNote && (
-        <div
-          ref={viewFormRef}
-          className={fullscreen ? "flex flex-col h-full bg-white p-8" : "flex flex-col flex-1 min-h-0"}
-        >
-          <div className={`flex items-center gap-3 shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200" : "mb-4"}`}>
-            <button
-              onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setViewingNote(null); }}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
-            >
-              ← Back
-            </button>
-            <div className="ml-auto flex gap-2">
+        <div ref={viewFormRef} className={fullscreen ? "flex flex-col h-full bg-white p-8" : "pt-4"}>
+          {fullscreen && (
+            <div className="flex items-center gap-3 shrink-0 mb-6 pb-4 border-b border-gray-200">
               <button
-                onClick={toggleViewFullscreen}
-                className={`flex items-center gap-2 font-medium transition rounded-xl ${
-                  fullscreen
-                    ? "text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2"
-                    : "text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 px-2.5 py-1.5"
-                }`}
+                onClick={() => { document.exitFullscreen(); setViewingNote(null); }}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition"
               >
-                {fullscreen ? (
-                  <><span className="text-base">✕</span> Exit Fullscreen</>
-                ) : (
-                  <><span className="text-sm">⛶</span> Expand</>
-                )}
+                ← Back
               </button>
-              <button
-                onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(viewingNote); setViewingNote(null); }}
-                className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
-              >
-                ✏️ Edit
-              </button>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={toggleViewFullscreen}
+                  className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-4 py-2 font-medium transition rounded-xl"
+                >
+                  <span className="text-base">✕</span> Exit Fullscreen
+                </button>
+                <button
+                  onClick={() => { document.exitFullscreen(); setEditingNote(viewingNote); setViewingNote(null); }}
+                  className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
+                >
+                  ✏️ Edit
+                </button>
+              </div>
             </div>
-          </div>
-          <h2 className={`font-bold text-gray-800 mb-3 shrink-0 ${fullscreen ? "text-2xl" : "text-xl"}`}>{viewingNote.title}</h2>
-          <p className="text-sm text-gray-600 whitespace-pre-wrap flex-1 overflow-y-auto">
-            {viewingNote.content || <span className="text-gray-400 italic">No content</span>}
+          )}
+          {fullscreen && <h2 className="text-2xl font-bold text-gray-800 mb-3">{viewingNote.title}</h2>}
+          <p className={`text-gray-600 whitespace-pre-wrap ${fullscreen ? "text-base flex-1 overflow-y-auto" : "text-sm"}`}>
+            {viewingNote.content ? viewingNote.content : <span className="text-gray-400 italic">No content</span>}
           </p>
         </div>
       )}
@@ -579,6 +612,8 @@ function NotePanel({ notebook }) {
           )}
         </div>
       )}
+
+      </div>{/* end scrollable content */}
 
     </div>
   );
