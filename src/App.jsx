@@ -1,22 +1,39 @@
 import { useState, useEffect } from "react";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import AuthPage from "./pages/AuthPage";
 import NotebookList from "./components/NotebookList";
 import CreateNotebook from "./components/CreateNotebook";
 import NotePanel from "./components/NotePanel";
 
-function App() {
+function AppInner() {
+  const { isLoggedIn, user, logout, updateTheme } = useAuth();
   const [selectedNotebook, setSelectedNotebook] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [dark, setDark] = useState(() => localStorage.getItem("theme") === "dark");
+  const [dark, setDark] = useState(() => {
+    const savedUser = JSON.parse(localStorage.getItem("user") || "null");
+    return (savedUser?.theme ?? localStorage.getItem("theme") ?? "dark") === "dark";
+  });
+
+  useEffect(() => {
+    if (user?.theme) setDark(user.theme === "dark");
+  }, [user?.theme]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
+
+  const toggleTheme = async () => {
+    const newDark = !dark;
+    setDark(newDark);
+    if (isLoggedIn) await updateTheme(newDark ? "dark" : "light");
+  };
 
   const refresh = () => {
     setRefreshKey((k) => k + 1);
     setSelectedNotebook(null);
   };
+
+  if (!isLoggedIn) return <AuthPage />;
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-black overflow-hidden">
@@ -26,13 +43,22 @@ function App() {
           <h1 className="text-4xl font-bold text-blue-600">Dream Notes 🚀</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Organize your notebooks and notes beautifully</p>
         </div>
-        <button
-          onClick={() => setDark((v) => !v)}
-          className="text-2xl p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          title="Toggle theme"
-        >
-          {dark ? "☀️" : "🌙"}
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</span>
+          <button
+            onClick={logout}
+            className="text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl hover:border-red-300 dark:hover:border-red-700 transition"
+          >
+            Logout
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="text-2xl p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            title="Toggle theme"
+          >
+            {dark ? "☀️" : "🌙"}
+          </button>
+        </div>
       </header>
 
       {/* Main Layout */}
@@ -77,6 +103,14 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   );
 }
 
