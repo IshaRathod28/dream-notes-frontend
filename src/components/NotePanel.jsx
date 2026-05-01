@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes, uploadImages, deleteImage } from "../services/noteService";
+import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes, uploadImages, deleteImage, saveImageLayout } from "../services/noteService";
 import { getNotebooks } from "../services/notebookService";
 
 function NotePanel({ notebook }) {
   const [notes, setNotes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [editingNote, setEditingNote] = useState(null);
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("both");
@@ -18,19 +17,40 @@ function NotePanel({ notebook }) {
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [viewingNote, setViewingNote] = useState(null);
+  const [imageMeta, setImageMeta] = useState({});
+  const [imageOrders, setImageOrders] = useState({});
+  const [createBlocks, setCreateBlocks] = useState([{ id: "b0", type: "text", value: "" }]);
+  const [editBlocks, setEditBlocks] = useState([]);
+  const panelRef = useRef(null);
   const menuRef = useRef(null);
-  const formRef = useRef(null);
-  const editFormRef = useRef(null);
-  const viewFormRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const noteDetailRef = useRef(null);
   const editFileInputRef = useRef(null);
+  const createFileInputRef = useRef(null);
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
+  const wasFullscreenRef = useRef(false);
+
+  useEffect(() => {
+    if (!viewingNote?.image_layout) return;
+    const { meta = {}, order } = viewingNote.image_layout;
+    setImageMeta((prev) => ({ ...prev, ...meta }));
+    if (order) setImageOrders((prev) => ({ ...prev, [viewingNote.id]: order }));
+  }, [viewingNote?.id]);
+
+  useEffect(() => {
+    if (!editingNote?.image_layout) return;
+    const { meta = {}, order } = editingNote.image_layout;
+    setImageMeta((prev) => ({ ...prev, ...meta }));
+    if (order) setImageOrders((prev) => ({ ...prev, [editingNote.id]: order }));
+  }, [editingNote?.id]);
 
   useEffect(() => {
     fetchNotes();
     setEditingNote(null);
+    setEditBlocks([]);
     setShowForm(false);
     setTitle("");
-    setContent("");
+    setCreateBlocks([{ id: genId(), type: "text", value: "" }]);
     setSearch("");
     setSearchField("both");
     setOpenMenuId(null);
@@ -55,27 +75,12 @@ function NotePanel({ notebook }) {
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      formRef.current?.requestFullscreen();
+      panelRef.current?.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
   };
 
-  const toggleEditFullscreen = () => {
-    if (!document.fullscreenElement) {
-      editFormRef.current?.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
-  };
-
-  const toggleViewFullscreen = () => {
-    if (!document.fullscreenElement) {
-      viewFormRef.current?.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
-  };
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -97,10 +102,45 @@ function NotePanel({ notebook }) {
     return n.title.toLowerCase().includes(q) || (n.content || "").toLowerCase().includes(q);
   });
 
+  const genId = () => Math.random().toString(36).slice(2, 9);
+
+  const blocksFromNote = (note) => {
+    const images = note.images || [];
+    const layout = note.image_layout;
+    if (layout?.blocks?.length) {
+      return layout.blocks.map((b) => ({
+        id: genId(),
+        type: b.type,
+        ...(b.type === "text"
+          ? { value: b.value || "" }
+          : { imageId: b.id, url: images.find((img) => img.id === b.id)?.url || "" }),
+      }));
+    }
+    const blocks = [{ id: genId(), type: "text", value: note.content || "" }];
+    images.forEach((img) => {
+      blocks.push({ id: genId(), type: "image", imageId: img.id, url: img.url });
+    });
+    return blocks;
+  };
+
+  const normalizeNote = (note) => {
+    if (!note) return note;
+    if (note.images) return note;
+    const urls = note.image_urls || [];
+    return {
+      ...note,
+      images: urls.map((url) => ({
+        id: url,
+        url,
+        filename: decodeURIComponent(url.split("/").pop().split("?")[0]),
+      })),
+    };
+  };
+
   const fetchNotes = async () => {
     try {
       const data = await getNotes(notebook.id);
-      setNotes(data);
+      setNotes(data.map(normalizeNote));
     } catch (error) {
       console.error("Failed to fetch notes:", error);
     }
@@ -145,10 +185,24 @@ function NotePanel({ notebook }) {
     e.preventDefault();
     if (!title.trim()) return;
     try {
-      const note = await createNote(notebook.id, { title: title.trim(), content: content.trim() });
+      const textContent = createBlocks.filter((b) => b.type === "text").map((b) => b.value).join("\n\n").trim();
+      let note = normalizeNote(await createNote(notebook.id, { title: title.trim(), content: textContent }));
+      const imageBlocks = createBlocks.filter((b) => b.type === "image" && b.file);
+      if (imageBlocks.length > 0) {
+        note = normalizeNote(await uploadImages(notebook.id, note.id, imageBlocks.map((b) => b.file)));
+        let imgIdx = 0;
+        const blockLayout = createBlocks.map((b) => {
+          if (b.type === "text") return { type: "text", value: b.value };
+          const img = note.images[imgIdx++];
+          return { type: "image", id: img?.id || "" };
+        }).filter((b) => b.type !== "image" || b.id);
+        note = normalizeNote(await saveImageLayout(notebook.id, note.id, {
+          meta: {}, order: note.images.map((img) => img.id), blocks: blockLayout,
+        }));
+      }
       setNotes([note, ...notes]);
       setTitle("");
-      setContent("");
+      setCreateBlocks([{ id: genId(), type: "text", value: "" }]);
       setShowForm(false);
     } catch (error) {
       console.error("Failed to create note:", error);
@@ -158,12 +212,24 @@ function NotePanel({ notebook }) {
   const handleEditSave = async () => {
     if (!editingNote.title.trim()) return;
     try {
-      const updated = await updateNote(notebook.id, editingNote.id, {
+      const textContent = editBlocks.filter((b) => b.type === "text").map((b) => b.value).join("\n\n").trim();
+      let updated = normalizeNote(await updateNote(notebook.id, editingNote.id, {
         title: editingNote.title,
-        content: editingNote.content,
-      });
-      setNotes(notes.map((n) => (n.id === updated.id ? updated : n)));
+        content: textContent,
+      }));
+      const blockLayout = editBlocks
+        .filter((b) => b.type !== "image" || b.imageId)
+        .map((b) => b.type === "text" ? { type: "text", value: b.value } : { type: "image", id: b.imageId });
+      const imageIds = editBlocks.filter((b) => b.type === "image" && b.imageId).map((b) => b.imageId);
+      const noteMeta = {};
+      imageIds.forEach((id) => { if (imageMeta[id]) noteMeta[id] = imageMeta[id]; });
+      updated = normalizeNote(await saveImageLayout(notebook.id, editingNote.id, {
+        meta: noteMeta, order: imageIds, blocks: blockLayout,
+      }));
+      setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
       setEditingNote(null);
+      setEditBlocks([]);
+      setViewingNote(updated);
     } catch (error) {
       console.error("Failed to update note:", error);
     }
@@ -191,12 +257,83 @@ function NotePanel({ notebook }) {
     }
   };
 
-  const handleImageDelete = async (imageId, noteId) => {
+  const saveLayout = async (noteId, images, overrideMeta, overrideOrder) => {
+    const meta = overrideMeta ?? imageMeta;
+    const order = overrideOrder ?? (imageOrders[noteId] || images.map((i) => i.id));
+    const noteMeta = {};
+    images.forEach((img) => { if (meta[img.id]) noteMeta[img.id] = meta[img.id]; });
     try {
-      const updated = await deleteImage(notebook.id, noteId, imageId);
+      const updated = normalizeNote(await saveImageLayout(notebook.id, noteId, { meta: noteMeta, order }));
       setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
       if (viewingNote?.id === updated.id) setViewingNote(updated);
       if (editingNote?.id === updated.id) setEditingNote(updated);
+    } catch (err) {
+      console.error("Failed to save image layout:", err);
+    }
+  };
+
+
+  const startResize = (e, imageId, noteId, images) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const container = e.currentTarget.parentElement;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = container.offsetWidth;
+    const startHeight = container.querySelector("img")?.offsetHeight || container.offsetHeight;
+    const maxWidth = container.parentElement?.offsetWidth || 600;
+    let latestMeta = imageMeta;
+    const onMove = (me) => {
+      const newWidth = Math.min(maxWidth, Math.max(80, startWidth + (me.clientX - startX)));
+      const newHeight = Math.max(60, startHeight + (me.clientY - startY));
+      latestMeta = { ...latestMeta, [imageId]: { width: newWidth, height: newHeight } };
+      setImageMeta(latestMeta);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      saveLayout(noteId, images, latestMeta, null);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  const handleDragStart = (e, imageId) => {
+    dragItem.current = imageId;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, imageId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    dragOverItem.current = imageId;
+  };
+
+  const handleDrop = (e, noteId, images) => {
+    e.preventDefault();
+    if (!dragItem.current || dragItem.current === dragOverItem.current) return;
+    const currentOrder = imageOrders[noteId] || images.map((i) => i.id);
+    const from = currentOrder.indexOf(dragItem.current);
+    const to = currentOrder.indexOf(dragOverItem.current);
+    if (from === -1 || to === -1) return;
+    const newOrder = [...currentOrder];
+    newOrder.splice(from, 1);
+    newOrder.splice(to, 0, dragItem.current);
+    setImageOrders((prev) => ({ ...prev, [noteId]: newOrder }));
+    dragItem.current = null;
+    dragOverItem.current = null;
+    saveLayout(noteId, images, null, newOrder);
+  };
+
+  const handleImageDelete = async (imageId, noteId) => {
+    try {
+      const updated = normalizeNote(await deleteImage(notebook.id, noteId, imageId));
+      setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+      if (viewingNote?.id === updated.id) setViewingNote(updated);
+      if (editingNote?.id === updated.id) {
+        setEditingNote(updated);
+        setEditBlocks((prev) => prev.filter((b) => b.imageId !== imageId));
+      }
     } catch (err) {
       console.error("Image delete failed:", err);
     }
@@ -206,10 +343,21 @@ function NotePanel({ notebook }) {
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (!imageFiles.length) return;
     try {
-      const updated = await uploadImages(notebook.id, noteId, imageFiles);
+      const prevIds = new Set((editingNote?.id === noteId ? editingNote.images : []).map((img) => img.id));
+      const updated = normalizeNote(await uploadImages(notebook.id, noteId, imageFiles));
       setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
       if (viewingNote?.id === updated.id) setViewingNote(updated);
-      if (editingNote?.id === updated.id) setEditingNote(updated);
+      if (editingNote?.id === updated.id) {
+        setEditingNote(updated);
+        const newImgs = (updated.images || []).filter((img) => !prevIds.has(img.id));
+        setEditBlocks((prev) => [
+          ...prev,
+          ...newImgs.flatMap((img) => [
+            { id: genId(), type: "image", imageId: img.id, url: img.url },
+            { id: genId(), type: "text", value: "" },
+          ]),
+        ]);
+      }
     } catch (err) {
       console.error("Image upload failed:", err);
     }
@@ -220,414 +368,560 @@ function NotePanel({ notebook }) {
     if (files.length) handleImageUpload(files, noteId);
   };
 
+  const handleExportPDF = async () => {
+    const { jsPDF } = await import("jspdf");
+
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+    const margin = 15;
+    const pageW = doc.internal.pageSize.width;
+    const pageH = doc.internal.pageSize.height;
+    const maxWidth = pageW - margin * 2;
+    const maxImgHeight = pageH - margin * 2;
+
+    let y = margin;
+
+    const addPageIfNeeded = (heightNeeded) => {
+      if (y + heightNeeded > pageH - margin) {
+        doc.addPage();
+        y = margin;
+      }
+    };
+
+    const fetchImg = async (url) => {
+      try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        const dims = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => resolve({ w: 1, h: 1 });
+          img.src = base64;
+        });
+        return { base64, dims };
+      } catch {
+        return null;
+      }
+    };
+
+    const selectedNotes = notes.filter((n) => selectedIds.includes(n.id));
+
+    for (let i = 0; i < selectedNotes.length; i++) {
+      const note = selectedNotes[i];
+
+      if (i !== 0) {
+        addPageIfNeeded(15);
+        y += 5;
+        doc.setDrawColor(200);
+        doc.line(margin, y, pageW - margin, y);
+        y += 8;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      const titleLines = doc.splitTextToSize(note.title, maxWidth);
+      const titleLineH = 7;
+      addPageIfNeeded(titleLines.length * titleLineH);
+      doc.text(titleLines, margin, y);
+      y += titleLines.length * titleLineH + 4;
+
+      const layout = note.image_layout;
+      const images = note.images || [];
+      const blocks = layout?.blocks?.length
+        ? layout.blocks
+        : [
+            { type: "text", value: note.content || "" },
+            ...images.map((img) => ({ type: "image", id: img.id })),
+          ];
+
+      for (const block of blocks) {
+        if (block.type === "text" && block.value?.trim()) {
+          doc.setFont("courier", "normal");
+          doc.setFontSize(11);
+          const lines = doc.splitTextToSize(block.value, maxWidth);
+          const lineH = 5.5;
+
+          let remaining = [...lines];
+          while (remaining.length > 0) {
+            const available = pageH - margin - y;
+            const linesThisPage = Math.max(1, Math.floor(available / lineH));
+            const chunk = remaining.splice(0, linesThisPage);
+            doc.text(chunk, margin, y);
+            y += chunk.length * lineH;
+            if (remaining.length > 0) { doc.addPage(); y = margin; }
+          }
+          y += 4;
+        } else if (block.type === "image") {
+          const imgObj = images.find((im) => im.id === block.id);
+          if (!imgObj?.url) continue;
+
+          const result = await fetchImg(imgObj.url);
+          if (!result) continue;
+
+          const { base64, dims } = result;
+          let imgWidth = maxWidth;
+          let imgHeight = (imgWidth * dims.h) / dims.w;
+
+          if (imgHeight > maxImgHeight) {
+            imgHeight = maxImgHeight;
+            imgWidth = (imgHeight * dims.w) / dims.h;
+          }
+
+          addPageIfNeeded(imgHeight);
+          doc.addImage(base64, "JPEG", margin, y, imgWidth, imgHeight);
+          y += imgHeight + 6;
+        }
+      }
+    }
+
+    doc.save("notes-export.pdf");
+  };
   const otherNotebooks = allNotebooks.filter((nb) => nb.id !== notebook.id);
   const allSelected = filteredNotes.length > 0 && selectedIds.length === filteredNotes.length;
+  const inDetail = !showForm && (viewingNote || editingNote);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div ref={panelRef} className="flex flex-col h-full overflow-hidden bg-white dark:bg-gray-950">
 
-      {/* Sticky top: notebook header + toolbar + bulk bar */}
+      {/* Sticky top */}
       <div className="shrink-0 px-8 pt-8 pb-2 bg-white dark:bg-gray-950">
 
-      {/* Notebook header */}
-      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-        <span className="text-2xl">📓</span>
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">{notebook.name}</h2>
-        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 shrink-0">
-          {notes.length} note{notes.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-
-      {/* Toolbar: create + search */}
-      {!showForm && (
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => { setViewingNote(null); setShowForm(true); }}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors duration-150 shadow-sm shrink-0"
-          >
-            <span className="text-lg leading-none">+</span> Create Note
-          </button>
-
-          {!viewingNote && (
-            <div className="flex flex-1 items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
-              <select
-                value={searchField}
-                onChange={(e) => setSearchField(e.target.value)}
-                className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-3 py-2.5 focus:outline-none cursor-pointer"
-              >
-                <option value="both">Both</option>
-                <option value="title">Title</option>
-                <option value="content">Content</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Search notes..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
-              />
-              {search && (
-                <button onClick={() => setSearch("")} className="px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-                  ✕
-                </button>
-              )}
-            </div>
-          )}
+        {/* Notebook header */}
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+          <span className="text-2xl">📓</span>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">{notebook.name}</h2>
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {notes.length} note{notes.length !== 1 ? "s" : ""}
+            </span>
+            <button
+              onClick={toggleFullscreen}
+              className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5 font-medium transition rounded-xl"
+              title={fullscreen ? "Exit Fullscreen" : "Expand"}
+            >
+              {fullscreen ? <><span>✕</span> Exit Fullscreen</> : <><span>⛶</span> Expand</>}
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Bulk action bar */}
-      {!showForm && selectedIds.length > 0 && (
-        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl" ref={menuRef}>
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={toggleSelectAll}
-            className="w-4 h-4 accent-blue-600 cursor-pointer shrink-0"
-            title={allSelected ? "Deselect all" : "Select all"}
-          />
-          <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-            {selectedIds.length} selected
-          </span>
+        {/* Toolbar: create + search */}
+        {!showForm && !inDetail && (
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => { setViewingNote(null); setEditingNote(null); setShowForm(true); }}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors duration-150 shadow-sm shrink-0"
+            >
+              <span className="text-lg leading-none">+</span> Create Note
+            </button>
 
-          <div className="flex items-center gap-2 ml-auto relative">
-            {/* Bulk move */}
-            {otherNotebooks.length > 0 && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowBulkMove((v) => !v)}
-                  className="flex items-center gap-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-1.5 rounded-lg transition"
+            {!inDetail && (
+              <div className="flex flex-1 items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
+                <select
+                  value={searchField}
+                  onChange={(e) => setSearchField(e.target.value)}
+                  className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-3 py-2.5 focus:outline-none cursor-pointer"
                 >
-                  📂 Move to {showBulkMove ? "▲" : "▼"}
-                </button>
-                {showBulkMove && (
-                  <div className="absolute left-0 top-9 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[160px]">
-                    {otherNotebooks.map((nb) => (
-                      <button
-                        key={nb.id}
-                        onClick={() => handleBulkMove(nb.id)}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400 flex items-center gap-2"
-                      >
-                        📓 <span className="truncate">{nb.name}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <option value="both">Both</option>
+                  <option value="title">Title</option>
+                  <option value="content">Content</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Search notes..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
+                    ✕
+                  </button>
                 )}
               </div>
             )}
-
-            {/* Bulk delete */}
-            <button
-              onClick={handleBulkDelete}
-              className="flex items-center gap-1.5 text-sm bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg transition"
-            >
-              🗑️ Delete
-            </button>
-
-            {/* Cancel */}
-            <button
-              onClick={() => { setSelectionMode(false); setSelectedIds([]); setShowBulkMove(false); }}
-              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
-            >
-              Cancel
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {!showForm && viewingNote && (
-        <div className={`flex items-center gap-3 shrink-0 pb-4 border-b border-gray-100 dark:border-gray-800 ${fullscreen ? "mb-6" : "mb-4"}`}>
-          <button
-            onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setViewingNote(null); }}
-            className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 transition"
-          >
-            ← Back
-          </button>
-          <div className="ml-auto flex gap-2">
-            <button
-              onClick={toggleViewFullscreen}
-              className={`flex items-center gap-2 font-medium transition rounded-xl ${
-                fullscreen
-                  ? "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2"
-                  : "text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5"
-              }`}
-            >
-              {fullscreen ? (
-                <><span className="text-base">✕</span> Exit Fullscreen</>
-              ) : (
-                <><span className="text-sm">⛶</span> Expand</>
-              )}
-            </button>
-            <button
-              onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(viewingNote); setViewingNote(null); }}
-              className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
-            >
-              ✏️ Edit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!showForm && viewingNote && !fullscreen && (
-        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 px-0 pb-3">{viewingNote.title}</h2>
-      )}
-
-      </div>
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
-
-      {showForm && (
-        <form
-          ref={formRef}
-          onSubmit={handleCreate}
-          className={
-            fullscreen
-              ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8"
-              : "flex flex-col flex-1 border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 min-h-0"
-          }
-        >
-          <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200 dark:border-gray-800" : "mb-3"}`}>
-            <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800 dark:text-gray-100" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
-              <span className={fullscreen ? "text-2xl" : "text-sm"}>✍️</span>
-              New Note
-            </p>
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              className={`flex items-center gap-2 font-medium transition rounded-xl ${
-                fullscreen
-                  ? "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2"
-                  : "text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5"
-              }`}
-            >
-              {fullscreen ? (
-                <><span className="text-base">✕</span> Exit Fullscreen</>
-              ) : (
-                <><span className="text-sm">⛶</span> Expand</>
-              )}
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-2 flex-1 min-h-0">
+        {/* Bulk action bar */}
+        {!showForm && !inDetail && selectedIds.length > 0 && (
+          <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl" ref={menuRef}>
             <input
-              autoFocus
-              type="text"
-              placeholder="Note title..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={`w-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition shrink-0 ${fullscreen ? "text-lg text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 accent-blue-600 cursor-pointer shrink-0"
+              title={allSelected ? "Deselect all" : "Select all"}
             />
-            <textarea
-              placeholder="Write your note here..."
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className={`flex-1 w-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition resize-none min-h-[150px] ${fullscreen ? "text-base text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
-            />
-            <div className="flex gap-2 justify-end mt-1 shrink-0">
+            <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+              {selectedIds.length} selected
+            </span>
+            <div className="flex items-center gap-2 ml-auto relative">
+              {otherNotebooks.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowBulkMove((v) => !v)}
+                    className="flex items-center gap-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-4 py-1.5 rounded-lg transition"
+                  >
+                    📂 Move to {showBulkMove ? "▲" : "▼"}
+                  </button>
+                  {showBulkMove && (
+                    <div className="absolute left-0 top-9 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[160px]">
+                      {otherNotebooks.map((nb) => (
+                        <button
+                          key={nb.id}
+                          onClick={() => handleBulkMove(nb.id)}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-700 dark:hover:text-blue-400 flex items-center gap-2"
+                        >
+                          📓 <span className="truncate">{nb.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
-                type="button"
-                onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setShowForm(false); setTitle(""); setContent(""); }}
-                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-4 py-2 rounded-xl transition"
+                onClick={handleExportPDF}
+                className="flex items-center gap-1.5 text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg transition"
+              >
+                📄 Export PDF
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-1.5 text-sm bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg transition"
+              >
+                🗑️ Delete
+              </button>
+              <button
+                onClick={() => { setSelectionMode(false); setSelectedIds([]); setShowBulkMove(false); }}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2 rounded-xl transition-colors duration-150 shadow-sm"
-              >
-                Add Note
-              </button>
             </div>
           </div>
-        </form>
-      )}
+        )}
 
-      {/* Note view */}
-      {!showForm && viewingNote && (
-        <div
-          ref={viewFormRef}
-          onPaste={(e) => handlePaste(e, viewingNote.id)}
-          className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "pt-4"}
-        >
-          {fullscreen && (
-            <div className="flex items-center gap-3 shrink-0 mb-6 pb-4 border-b border-gray-200 dark:border-gray-800">
+        {/* Detail header — shown for both view and edit */}
+        {inDetail && (
+          <div className="flex items-center shrink-0 mb-0 pb-2 border-b border-gray-100 dark:border-gray-800">
+            <button
+              onClick={() => { setViewingNote(null); setEditingNote(null); }}
+              className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 transition"
+            >
+              ← Back
+            </button>
+            <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => { document.exitFullscreen(); setViewingNote(null); }}
-                className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 transition"
+                onClick={() => { setViewingNote(null); setEditingNote(null); setShowForm(true); }}
+                className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 rounded-lg transition"
               >
-                ← Back
+                + Create Another Note
               </button>
-              <div className="ml-auto flex gap-2">
+              {viewingNote && !editingNote && (
                 <button
-                  onClick={toggleViewFullscreen}
-                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2 font-medium transition rounded-xl"
-                >
-                  <span className="text-base">✕</span> Exit Fullscreen
-                </button>
-                <button
-                  onClick={() => { document.exitFullscreen(); setEditingNote(viewingNote); setViewingNote(null); }}
+                  onClick={() => { setEditBlocks(blocksFromNote(viewingNote)); setEditingNote(viewingNote); setViewingNote(null); }}
                   className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
                 >
                   ✏️ Edit
                 </button>
+              )}
+            </div>
+          </div>
+        )}
+
+      </div>
+      <div className={`flex-1 px-8 pb-8 ${fullscreen && showForm ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+
+        {/* Create form */}
+        {showForm && (
+          <form
+            onSubmit={handleCreate}
+            className={`flex flex-col border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 ${fullscreen ? "h-full" : ""}`}
+          >
+            <div className="mb-3 shrink-0">
+              <p className="flex items-center gap-2 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                <span className="text-sm">✍️</span> New Note
+              </p>
+            </div>
+            <div className={`flex flex-col gap-3 ${fullscreen ? "flex-1 min-h-0" : ""}`}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Note title..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={`w-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition shrink-0 ${fullscreen ? "text-lg text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
+              />
+
+              {/* Block editor */}
+              <div className={`border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-transparent transition ${fullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}`}>
+                {createBlocks.map((block, idx) =>
+                  block.type === "text" ? (
+                    <textarea
+                      key={block.id}
+                      placeholder={idx === 0 ? "Write your note here..." : "Continue writing..."}
+                      value={block.value}
+                      rows={2}
+                      onChange={(e) => setCreateBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, value: e.target.value } : b))}
+                      className={`w-full bg-transparent px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none resize-none ${fullscreen ? "text-base text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
+                    />
+                  ) : (
+                    <div key={block.id} className="px-4 py-2 flex flex-wrap gap-3">
+                      <div className="relative group flex-shrink-0" style={{ width: "calc(50% - 6px)" }}>
+                        <img
+                          src={block.localUrl}
+                          alt="preview"
+                          draggable={false}
+                          className="rounded-xl w-full h-auto border border-gray-100 dark:border-gray-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCreateBlocks((prev) => prev.filter((b) => b.id !== block.id))}
+                          className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                          title="Delete image"
+                        >✕</button>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="flex gap-2 mt-1 justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { wasFullscreenRef.current = !!document.fullscreenElement; createFileInputRef.current?.click(); }}
+                  className="text-sm text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-1.5 rounded-lg transition mr-auto"
+                >
+                  📎 Add Image
+                </button>
+                <input
+                  ref={createFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (wasFullscreenRef.current) panelRef.current?.requestFullscreen();
+                    Array.from(e.target.files || []).filter((f) => f.type.startsWith("image/")).forEach((file) => {
+                      setCreateBlocks((prev) => [
+                        ...prev,
+                        { id: genId(), type: "image", file, localUrl: URL.createObjectURL(file) },
+                        { id: genId(), type: "text", value: "" },
+                      ]);
+                    });
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setTitle(""); setCreateBlocks([{ id: genId(), type: "text", value: "" }]); }}
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
+                >
+                  Add Note
+                </button>
               </div>
             </div>
-          )}
-          {fullscreen && <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-3">{viewingNote.title}</h2>}
-          <p className={`text-gray-600 dark:text-gray-300 whitespace-pre-wrap ${fullscreen ? "text-base" : "text-sm"}`}>
-            {viewingNote.content ? viewingNote.content : <span className="text-gray-400 dark:text-gray-500 italic">No content</span>}
-          </p>
+          </form>
+        )}
 
-          {/* Images */}
-          {viewingNote.images?.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              {viewingNote.images.map((img) => (
-                <div key={img.id} className="relative group">
-                  <img
-                    src={img.url}
-                    alt={img.filename}
-                    className="rounded-xl w-full object-cover max-h-64 border border-gray-100 dark:border-gray-800"
-                  />
-                  <button
-                    onClick={() => handleImageDelete(img.id, viewingNote.id)}
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
-                    title="Delete image"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Upload button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="mt-4 flex items-center gap-1.5 text-sm text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition"
+        {/*
+          Single persistent container for view AND edit.
+          This div never unmounts when switching between view↔edit,
+          so the browser fullscreen is never interrupted.
+        */}
+        {inDetail && (
+          <div
+            ref={noteDetailRef}
+            onPaste={(e) => handlePaste(e, (editingNote || viewingNote).id)}
+            className={
+              fullscreen
+                ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8"
+                : "border border-blue-300 dark:border-blue-700 rounded-2xl px-4 pb-4 pt-2 bg-blue-50 dark:bg-blue-900/20"
+            }
           >
-            📎 Add Image
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => { handleImageUpload(e.target.files, viewingNote.id); e.target.value = ""; }}
-          />
-        </div>
-      )}
 
-      {/* Notes list */}
-      {!showForm && !viewingNote && (
-        <div className="flex flex-col gap-3" ref={selectedIds.length === 0 ? menuRef : null}>
-
-          {notes.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-4xl mb-3">📝</p>
-              <p className="text-gray-400 dark:text-gray-500 text-sm">No notes yet. Create your first one above!</p>
-            </div>
-          ) : filteredNotes.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-400 dark:text-gray-500 text-sm">No notes match "{search}"</p>
-            </div>
-          ) : (
-            filteredNotes.map((note) =>
-              editingNote?.id === note.id ? (
-                /* Edit mode */
-                <div
-                  key={note.id}
-                  ref={editFormRef}
-                  onPaste={(e) => handlePaste(e, note.id)}
-                  className={fullscreen ? "flex flex-col h-full bg-white dark:bg-gray-950 p-8" : "border border-blue-300 dark:border-blue-700 rounded-2xl p-4 bg-blue-50 dark:bg-blue-900/20"}
-                >
-                  <div className={`flex items-center justify-between shrink-0 ${fullscreen ? "mb-6 pb-4 border-b border-gray-200 dark:border-gray-800" : "mb-3"}`}>
-                    <p className={`flex items-center gap-2 ${fullscreen ? "text-2xl font-bold text-gray-800 dark:text-gray-100" : "text-xs font-semibold text-blue-600 uppercase tracking-wide"}`}>
-                      <span className={fullscreen ? "text-2xl" : "text-sm"}>✍️</span>
-                      Edit Note
+            {/* ── VIEW MODE ── */}
+            {/* ── VIEW MODE ── */}
+            {viewingNote && !editingNote && (() => {
+              const layout = viewingNote.image_layout;
+              const images = viewingNote.images || [];
+              const blocks = layout?.blocks?.length
+                ? layout.blocks
+                : [
+                    { type: "text", value: viewingNote.content || "" },
+                    ...images.map((img) => ({ type: "image", id: img.id })),
+                  ];
+              return (
+                <>
+                  <div className="shrink-0 mb-2">
+                    <p className="flex items-center gap-2 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                      <span className="text-sm">📄</span> Note
                     </p>
-                    <button
-                      type="button"
-                      onClick={toggleEditFullscreen}
-                      className={`flex items-center gap-2 font-medium transition rounded-xl ${
-                        fullscreen
-                          ? "text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 px-4 py-2"
-                          : "text-xs text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-2.5 py-1.5"
-                      }`}
-                    >
-                      {fullscreen ? (
-                        <><span className="text-base">✕</span> Exit Fullscreen</>
-                      ) : (
-                        <><span className="text-sm">⛶</span> Expand</>
-                      )}
-                    </button>
                   </div>
-                  <input
-                    autoFocus
-                    value={editingNote.title}
-                    onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
-                    className={`w-full bg-transparent border-b border-blue-300 dark:border-blue-600 pb-1 mb-3 focus:outline-none ${fullscreen ? "text-lg font-bold text-gray-800 dark:text-gray-100" : "font-semibold text-gray-800 dark:text-gray-100 text-sm"}`}
-                  />
-                  <textarea
-                    value={editingNote.content}
-                    onChange={(e) => setEditingNote({ ...editingNote, content: e.target.value })}
-                    className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "flex-1 text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
-                    rows={fullscreen ? undefined : 4}
-                  />
-                  {/* Images in edit mode */}
-                  {editingNote.images?.length > 0 && (
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      {editingNote.images.map((img) => (
-                        <div key={img.id} className="relative group">
+                  <p className={`w-full border-b border-blue-300 dark:border-blue-600 pb-1 mb-3 ${fullscreen ? "text-lg font-bold text-gray-800 dark:text-gray-100" : "font-semibold text-gray-800 dark:text-gray-100 text-sm"}`}>
+                    {viewingNote.title}
+                  </p>
+                  {blocks.map((block, idx) => {
+                    if (block.type === "text") {
+                      if (!block.value?.trim()) return null;
+                      return (
+                        <p key={`t-${idx}`} className={`whitespace-pre-wrap mb-1 ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}>
+                          {block.value}
+                        </p>
+                      );
+                    }
+                    const img = images.find((i) => i.id === block.id);
+                    if (!img?.url) return null;
+                    return (
+                      <div key={img.id} className="flex flex-wrap gap-3 mt-2 mb-2">
+                        <div
+                          className="relative group flex-shrink-0"
+                          style={{ width: imageMeta[img.id]?.width ? `${imageMeta[img.id].width}px` : "calc(50% - 6px)" }}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, img.id)}
+                          onDragOver={(e) => handleDragOver(e, img.id)}
+                          onDrop={(e) => handleDrop(e, viewingNote.id, viewingNote.images)}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        >
                           <img
                             src={img.url}
                             alt={img.filename}
-                            className="rounded-xl w-full object-cover max-h-48 border border-gray-100 dark:border-gray-800"
+                            draggable={false}
+                            style={imageMeta[img.id]?.height ? { height: `${imageMeta[img.id].height}px` } : {}}
+                            className={`rounded-xl w-full border border-gray-100 dark:border-gray-800 ${imageMeta[img.id]?.height ? "object-cover" : "h-auto"}`}
                           />
                           <button
-                            type="button"
-                            onClick={() => handleImageDelete(img.id, note.id)}
+                            onClick={() => handleImageDelete(img.id, viewingNote.id)}
                             className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
                             title="Delete image"
-                          >
-                            ✕
-                          </button>
+                          >✕</button>
+                          <div
+                            onMouseDown={(e) => startResize(e, img.id, viewingNote.id, viewingNote.images)}
+                            className="absolute bottom-2 right-2 w-5 h-5 flex items-center justify-center cursor-se-resize opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-gray-800/90 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs select-none"
+                            title="Resize"
+                          >⤡</div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
 
-                  <div className="flex gap-2 mt-3 justify-end shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => editFileInputRef.current?.click()}
-                      className="text-sm text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-1.5 rounded-lg transition mr-auto"
-                    >
-                      📎 Add Image
-                    </button>
-                    <input
-                      ref={editFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => { handleImageUpload(e.target.files, note.id); e.target.value = ""; }}
-                    />
-                    <button
-                      onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); setEditingNote(null); }}
-                      className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleEditSave}
-                      className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
-                    >
-                      Save
-                    </button>
-                  </div>
+            {/* ── EDIT MODE ── */}
+            {editingNote && (
+              <>
+                <div className="shrink-0 mb-2">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                    <span className="text-sm">✍️</span> Edit Note
+                  </p>
                 </div>
-              ) : (
-                /* View mode */
+                <input
+                  autoFocus
+                  value={editingNote.title}
+                  onChange={(e) => setEditingNote({ ...editingNote, title: e.target.value })}
+                  className={`w-full bg-transparent border-b border-blue-300 dark:border-blue-600 pb-1 mb-3 focus:outline-none ${fullscreen ? "text-lg font-bold text-gray-800 dark:text-gray-100" : "font-semibold text-gray-800 dark:text-gray-100 text-sm"}`}
+                />
+
+                {/* Block editor */}
+                {editBlocks.map((block, idx) =>
+                  block.type === "text" ? (
+                    <textarea
+                      key={block.id}
+                      placeholder={idx === 0 ? "Write your note here..." : "Continue writing..."}
+                      value={block.value}
+                      rows={fullscreen ? undefined : 2}
+                      onChange={(e) => setEditBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, value: e.target.value } : b))}
+                      className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
+                    />
+                  ) : block.url ? (
+                    <div key={block.id} className="flex flex-wrap gap-3 mt-2 mb-2">
+                      <div
+                        className="relative group flex-shrink-0"
+                        style={{ width: imageMeta[block.imageId]?.width ? `${imageMeta[block.imageId].width}px` : "calc(50% - 6px)" }}
+                      >
+                        <img
+                          src={block.url}
+                          alt=""
+                          draggable={false}
+                          className="rounded-xl w-full h-auto border border-gray-100 dark:border-gray-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleImageDelete(block.imageId, editingNote.id)}
+                          className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                          title="Delete image"
+                        >✕</button>
+                        <div
+                          onMouseDown={(e) => startResize(e, block.imageId, editingNote.id, editingNote.images)}
+                          className="absolute bottom-2 right-2 w-5 h-5 flex items-center justify-center cursor-se-resize opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-gray-800/90 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs select-none"
+                          title="Resize"
+                        >⤡</div>
+                      </div>
+                    </div>
+                  ) : null
+                )}
+
+                <div className="flex gap-2 mt-3 justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => { wasFullscreenRef.current = !!document.fullscreenElement; editFileInputRef.current?.click(); }}
+                    className="text-sm text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-1.5 rounded-lg transition mr-auto"
+                  >
+                    📎 Add Image
+                  </button>
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { if (wasFullscreenRef.current) panelRef.current?.requestFullscreen(); handleImageUpload(e.target.files, editingNote.id); e.target.value = ""; }}
+                  />
+                  <button
+                    onClick={() => { setViewingNote(editingNote); setEditingNote(null); setEditBlocks([]); }}
+                    className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditSave}
+                    className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
+                  >
+                    Save
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Notes list */}
+        {!showForm && !inDetail && (
+          <div className="flex flex-col gap-3" ref={selectedIds.length === 0 ? menuRef : null}>
+
+            {notes.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-4xl mb-3">📝</p>
+                <p className="text-gray-400 dark:text-gray-500 text-sm">No notes yet. Create your first one above!</p>
+              </div>
+            ) : filteredNotes.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-400 dark:text-gray-500 text-sm">No notes match "{search}"</p>
+              </div>
+            ) : (
+              filteredNotes.map((note) => (
                 <div
                   key={note.id}
                   className={`relative border rounded-2xl p-4 transition ${
@@ -637,7 +931,6 @@ function NotePanel({ notebook }) {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Checkbox — only visible in selection mode */}
                     {selectionMode && (
                       <input
                         type="checkbox"
@@ -657,7 +950,6 @@ function NotePanel({ notebook }) {
                       )}
                     </div>
 
-                    {/* Three-dot button */}
                     <button
                       onClick={() => setOpenMenuId(openMenuId === note.id ? null : note.id)}
                       className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition shrink-0 text-base font-bold leading-none"
@@ -667,11 +959,10 @@ function NotePanel({ notebook }) {
                     </button>
                   </div>
 
-                  {/* Dropdown menu */}
                   {openMenuId === note.id && (
                     <div className="absolute right-4 top-10 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[180px]">
                       <button
-                        onClick={() => { setEditingNote(note); setOpenMenuId(null); }}
+                        onClick={() => { setEditBlocks(blocksFromNote(note)); setEditingNote(note); setOpenMenuId(null); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
                         ✏️ <span>Edit</span>
@@ -719,11 +1010,10 @@ function NotePanel({ notebook }) {
                     </div>
                   )}
                 </div>
-              )
-            )
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
 
       </div>{/* end scrollable content */}
 
