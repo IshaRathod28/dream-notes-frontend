@@ -40,6 +40,13 @@ export const bulkMoveNotes = async (notebookId, noteIds, targetNotebookId) => {
   });
 };
 
+export const saveImageLayout = async (notebookId, noteId, layout) => {
+  const response = await api.patch(`/notebooks/${notebookId}/notes/${noteId}/update_image_layout`, {
+    image_layout: layout,
+  });
+  return response.data;
+};
+
 export const deleteImage = async (notebookId, noteId, imageId) => {
   const response = await api.delete(`/notebooks/${notebookId}/notes/${noteId}/delete_image`, {
     data: { image_id: imageId },
