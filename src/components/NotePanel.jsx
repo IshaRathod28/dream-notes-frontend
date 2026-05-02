@@ -108,13 +108,24 @@ function NotePanel({ notebook }) {
     const images = note.images || [];
     const layout = note.image_layout;
     if (layout?.blocks?.length) {
-      return layout.blocks.map((b) => ({
-        id: genId(),
-        type: b.type,
-        ...(b.type === "text"
-          ? { value: b.value || "" }
-          : { imageId: b.id, url: images.find((img) => img.id === b.id)?.url || "" }),
-      }));
+      const blocks = layout.blocks.map((b) => {
+        if (b.type === "text") return { id: genId(), type: "text", value: b.value || "" };
+        const matchedById = images.find((img) => img.id === b.id);
+        // legacy notes store the full URL as b.id — match by URL to get the real signed_id
+        const matchedByUrl = !matchedById ? images.find((img) => img.url === b.id) : null;
+        const resolved = matchedById || matchedByUrl;
+        const imageId = resolved?.id || b.id;
+        const url = resolved?.url || (b.id?.startsWith("http") ? b.id : "");
+        return { id: genId(), type: "image", imageId, url };
+      });
+      // If no text block carries content but note.content has text, inject it
+      const hasText = blocks.some((b) => b.type === "text" && b.value.trim());
+      if (!hasText && note.content?.trim()) {
+        const first = blocks.find((b) => b.type === "text");
+        if (first) first.value = note.content;
+        else blocks.unshift({ id: genId(), type: "text", value: note.content });
+      }
+      return blocks;
     }
     const blocks = [{ id: genId(), type: "text", value: note.content || "" }];
     images.forEach((img) => {
@@ -125,16 +136,12 @@ function NotePanel({ notebook }) {
 
   const normalizeNote = (note) => {
     if (!note) return note;
-    if (note.images) return note;
-    const urls = note.image_urls || [];
-    return {
-      ...note,
-      images: urls.map((url) => ({
-        id: url,
-        url,
-        filename: decodeURIComponent(url.split("/").pop().split("?")[0]),
-      })),
-    };
+    const images = (note.images || []).map((img) =>
+      typeof img === "string"
+        ? { id: img, url: img, filename: decodeURIComponent(img.split("/").pop().split("?")[0]) }
+        : { ...img, filename: decodeURIComponent((img.url || "").split("/").pop().split("?")[0]) }
+    );
+    return { ...note, images };
   };
 
   const fetchNotes = async () => {
@@ -156,7 +163,12 @@ function NotePanel({ notebook }) {
 
   const toggleSelectAll = () => {
     const allIds = filteredNotes.map((n) => n.id);
-    setSelectedIds(selectedIds.length === filteredNotes.length ? [] : allIds);
+    if (selectedIds.length === filteredNotes.length) {
+      setSelectedIds([]);
+      setSelectionMode(false);
+    } else {
+      setSelectedIds(allIds);
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -835,15 +847,21 @@ function NotePanel({ notebook }) {
                 />
 
                 {/* Block editor */}
+                <div className={fullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}>
                 {editBlocks.map((block, idx) =>
                   block.type === "text" ? (
                     <textarea
                       key={block.id}
                       placeholder={idx === 0 ? "Write your note here..." : "Continue writing..."}
                       value={block.value}
-                      rows={fullscreen ? undefined : 2}
-                      onChange={(e) => setEditBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, value: e.target.value } : b))}
-                      className={`w-full bg-transparent focus:outline-none resize-none ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
+                      rows={2}
+                      ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
+                      onChange={(e) => {
+                        e.target.style.height = "auto";
+                        e.target.style.height = e.target.scrollHeight + "px";
+                        setEditBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, value: e.target.value } : b));
+                      }}
+                      className={`w-full bg-transparent focus:outline-none resize-none overflow-hidden ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
                     />
                   ) : block.url ? (
                     <div key={block.id} className="flex flex-wrap gap-3 mt-2 mb-2">
@@ -872,6 +890,7 @@ function NotePanel({ notebook }) {
                     </div>
                   ) : null
                 )}
+                </div>
 
                 <div className="flex gap-2 mt-3 justify-end shrink-0">
                   <button
