@@ -1,6 +1,32 @@
 import { useState, useEffect, useRef } from "react";
 import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes, uploadImages, deleteImage, saveImageLayout, reorderNotes } from "../services/noteService";
 import { getNotebooks } from "../services/notebookService";
+import RichTextEditor from "./RichTextEditor";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Converts plain-text note content (old format) to HTML for the rich editor
+const toEditorContent = (content) => {
+  if (!content) return "";
+  if (/<[a-z][\s\S]*>/i.test(content)) return content; // already HTML
+  return content
+    .split("\n")
+    .map((line) =>
+      `<p>${line.trim() === "" ? "<br>" : line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`
+    )
+    .join("");
+};
+
+// Strips HTML tags to get plain text (for card preview + PDF export)
+const htmlToText = (html) => {
+  if (!html) return "";
+  if (!html.includes("<")) return html;
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return div.textContent || div.innerText || "";
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function NotePanel({ notebook, resetSignal }) {
   const [notes, setNotes] = useState([]);
@@ -24,8 +50,10 @@ function NotePanel({ notebook, resetSignal }) {
   const [viewingNote, setViewingNote] = useState(null);
   const [imageMeta, setImageMeta] = useState({});
   const [imageOrders, setImageOrders] = useState({});
-  const [createBlocks, setCreateBlocks] = useState([{ id: "b0", type: "text", value: "" }]);
+  const [createBlocks, setCreateBlocks] = useState([]);
   const [editBlocks, setEditBlocks] = useState([]);
+  const [createEditorContent, setCreateEditorContent] = useState("");
+  const [editEditorContent, setEditEditorContent] = useState("");
   const panelRef = useRef(null);
   const menuRef = useRef(null);
   const noteDetailRef = useRef(null);
@@ -56,6 +84,7 @@ function NotePanel({ notebook, resetSignal }) {
     setViewingNote(null);
     setEditingNote(null);
     setEditBlocks([]);
+    setEditEditorContent("");
     setShowForm(false);
   }, [resetSignal]);
 
@@ -65,7 +94,9 @@ function NotePanel({ notebook, resetSignal }) {
     setEditBlocks([]);
     setShowForm(false);
     setTitle("");
-    setCreateBlocks([{ id: genId(), type: "text", value: "" }]);
+    setCreateBlocks([]);
+    setCreateEditorContent("");
+    setEditEditorContent("");
     setSearch("");
     setSearchField("both");
     setOpenMenuId(null);
@@ -113,9 +144,10 @@ function NotePanel({ notebook, resetSignal }) {
   const filteredNotes = notes.filter((n) => {
     const q = search.toLowerCase();
     if (!q) return true;
+    const contentText = htmlToText(n.content || "");
     if (searchField === "title") return n.title.toLowerCase().includes(q);
-    if (searchField === "content") return (n.content || "").toLowerCase().includes(q);
-    return n.title.toLowerCase().includes(q) || (n.content || "").toLowerCase().includes(q);
+    if (searchField === "content") return contentText.toLowerCase().includes(q);
+    return n.title.toLowerCase().includes(q) || contentText.toLowerCase().includes(q);
   });
 
   const displayedNotes = (() => {
@@ -133,14 +165,12 @@ function NotePanel({ notebook, resetSignal }) {
       const blocks = layout.blocks.map((b) => {
         if (b.type === "text") return { id: genId(), type: "text", value: b.value || "" };
         const matchedById = images.find((img) => img.id === b.id);
-        // legacy notes store the full URL as b.id — match by URL to get the real signed_id
         const matchedByUrl = !matchedById ? images.find((img) => img.url === b.id) : null;
         const resolved = matchedById || matchedByUrl;
         const imageId = resolved?.id || b.id;
         const url = resolved?.url || (b.id?.startsWith("http") ? b.id : "");
         return { id: genId(), type: "image", imageId, url };
       });
-      // If no text block carries content but note.content has text, inject it
       const hasText = blocks.some((b) => b.type === "text" && b.value.trim());
       if (!hasText && note.content?.trim()) {
         const first = blocks.find((b) => b.type === "text");
@@ -250,24 +280,23 @@ function NotePanel({ notebook, resetSignal }) {
     e.preventDefault();
     if (!title.trim()) return;
     try {
-      const textContent = createBlocks.filter((b) => b.type === "text").map((b) => b.value).join("\n\n").trim();
+      const textContent = createEditorContent;
       let note = normalizeNote(await createNote(notebook.id, { title: title.trim(), content: textContent }));
       const imageBlocks = createBlocks.filter((b) => b.type === "image" && b.file);
       if (imageBlocks.length > 0) {
         note = normalizeNote(await uploadImages(notebook.id, note.id, imageBlocks.map((b) => b.file)));
-        let imgIdx = 0;
-        const blockLayout = createBlocks.map((b) => {
-          if (b.type === "text") return { type: "text", value: b.value };
-          const img = note.images[imgIdx++];
-          return { type: "image", id: img?.id || "" };
-        }).filter((b) => b.type !== "image" || b.id);
+        const blockLayout = [
+          { type: "text", value: textContent },
+          ...note.images.map((img) => ({ type: "image", id: img.id })),
+        ];
         note = normalizeNote(await saveImageLayout(notebook.id, note.id, {
           meta: {}, order: note.images.map((img) => img.id), blocks: blockLayout,
         }));
       }
       setNotes(sortMode === "custom" ? [...notes, note] : [note, ...notes]);
       setTitle("");
-      setCreateBlocks([{ id: genId(), type: "text", value: "" }]);
+      setCreateEditorContent("");
+      setCreateBlocks([]);
       setShowForm(false);
     } catch (error) {
       console.error("Failed to create note:", error);
@@ -277,15 +306,17 @@ function NotePanel({ notebook, resetSignal }) {
   const handleEditSave = async () => {
     if (!editingNote.title.trim()) return;
     try {
-      const textContent = editBlocks.filter((b) => b.type === "text").map((b) => b.value).join("\n\n").trim();
+      const textContent = editEditorContent;
       let updated = normalizeNote(await updateNote(notebook.id, editingNote.id, {
         title: editingNote.title,
         content: textContent,
       }));
-      const blockLayout = editBlocks
-        .filter((b) => b.type !== "image" || b.imageId)
-        .map((b) => b.type === "text" ? { type: "text", value: b.value } : { type: "image", id: b.imageId });
-      const imageIds = editBlocks.filter((b) => b.type === "image" && b.imageId).map((b) => b.imageId);
+      const imageBlocks = editBlocks.filter((b) => b.type === "image" && b.imageId);
+      const blockLayout = [
+        { type: "text", value: textContent },
+        ...imageBlocks.map((b) => ({ type: "image", id: b.imageId })),
+      ];
+      const imageIds = imageBlocks.map((b) => b.imageId);
       const noteMeta = {};
       imageIds.forEach((id) => { if (imageMeta[id]) noteMeta[id] = imageMeta[id]; });
       updated = normalizeNote(await saveImageLayout(notebook.id, editingNote.id, {
@@ -294,6 +325,7 @@ function NotePanel({ notebook, resetSignal }) {
       setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
       setEditingNote(null);
       setEditBlocks([]);
+      setEditEditorContent("");
       setViewingNote(updated);
     } catch (error) {
       console.error("Failed to update note:", error);
@@ -314,7 +346,6 @@ function NotePanel({ notebook, resetSignal }) {
     const reordered = [...notes];
     const fromIdx = reordered.findIndex((n) => n.id === noteId);
     const [moved] = reordered.splice(fromIdx, 1);
-    // afterId null means place at top
     const insertAt = afterId === null ? 0 : reordered.findIndex((n) => n.id === afterId) + 1;
     reordered.splice(insertAt, 0, moved);
     setNotes(reordered);
@@ -355,7 +386,6 @@ function NotePanel({ notebook, resetSignal }) {
       console.error("Failed to save image layout:", err);
     }
   };
-
 
   const startResize = (e, imageId, noteId, images) => {
     e.preventDefault();
@@ -436,10 +466,7 @@ function NotePanel({ notebook, resetSignal }) {
         const newImgs = (updated.images || []).filter((img) => !prevIds.has(img.id));
         setEditBlocks((prev) => [
           ...prev,
-          ...newImgs.flatMap((img) => [
-            { id: genId(), type: "image", imageId: img.id, url: img.url },
-            { id: genId(), type: "text", value: "" },
-          ]),
+          ...newImgs.map((img) => ({ id: genId(), type: "image", imageId: img.id, url: img.url })),
         ]);
       }
     } catch (err) {
@@ -453,7 +480,7 @@ function NotePanel({ notebook, resetSignal }) {
   };
 
   const cleanForPDF = (str) =>
-    str
+    htmlToText(str)
       .replace(/\p{Extended_Pictographic}/gu, "")
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
       .replace(/→|➜|➡/g, "->")
@@ -583,6 +610,7 @@ function NotePanel({ notebook, resetSignal }) {
     setShowExportModal(false);
     setExportFilename("");
   };
+
   const otherNotebooks = allNotebooks.filter((nb) => nb.id !== notebook.id);
   const allSelected = filteredNotes.length > 0 && selectedIds.length === filteredNotes.length;
   const inDetail = !showForm && (viewingNote || editingNote);
@@ -740,7 +768,13 @@ function NotePanel({ notebook, resetSignal }) {
               </button>
               {viewingNote && !editingNote && (
                 <button
-                  onClick={() => { setEditBlocks(blocksFromNote(viewingNote)); setEditingNote(viewingNote); setViewingNote(null); }}
+                  onClick={() => {
+                    const imageBlocks = blocksFromNote(viewingNote).filter((b) => b.type === "image");
+                    setEditEditorContent(toEditorContent(viewingNote.content));
+                    setEditBlocks(imageBlocks);
+                    setEditingNote(viewingNote);
+                    setViewingNote(null);
+                  }}
                   className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition"
                 >
                   ✏️ Edit
@@ -774,38 +808,36 @@ function NotePanel({ notebook, resetSignal }) {
                 className={`w-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition shrink-0 ${fullscreen ? "text-lg text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
               />
 
-              {/* Block editor */}
-              <div className={`border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-transparent transition ${fullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}`}>
-                {createBlocks.map((block, idx) =>
-                  block.type === "text" ? (
-                    <textarea
-                      key={block.id}
-                      placeholder={idx === 0 ? "Write your note here..." : "Continue writing..."}
-                      value={block.value}
-                      rows={2}
-                      onChange={(e) => setCreateBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, value: e.target.value } : b))}
-                      className={`w-full bg-transparent px-4 py-2.5 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none resize-none ${fullscreen ? "text-base text-gray-800 dark:text-gray-100" : "text-sm text-gray-700 dark:text-gray-200"}`}
-                    />
-                  ) : (
-                    <div key={block.id} className="px-4 py-2 flex flex-wrap gap-3">
-                      <div className="relative group flex-shrink-0" style={{ width: "calc(50% - 6px)" }}>
-                        <img
-                          src={block.localUrl}
-                          alt="preview"
-                          draggable={false}
-                          className="rounded-xl w-full h-auto border border-gray-100 dark:border-gray-800"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setCreateBlocks((prev) => prev.filter((b) => b.id !== block.id))}
-                          className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
-                          title="Delete image"
-                        >✕</button>
-                      </div>
-                    </div>
-                  )
-                )}
+              {/* Rich text editor */}
+              <div className={fullscreen ? "flex-1 min-h-0 flex flex-col" : ""}>
+                <RichTextEditor
+                  content={createEditorContent}
+                  onChange={setCreateEditorContent}
+                  minHeight={fullscreen ? "300px" : "120px"}
+                />
               </div>
+
+              {/* Image previews */}
+              {createBlocks.filter((b) => b.type === "image").length > 0 && (
+                <div className="flex flex-wrap gap-3 px-1">
+                  {createBlocks.filter((b) => b.type === "image").map((block) => (
+                    <div key={block.id} className="relative group flex-shrink-0" style={{ width: "calc(50% - 6px)" }}>
+                      <img
+                        src={block.localUrl}
+                        alt="preview"
+                        draggable={false}
+                        className="rounded-xl w-full h-auto border border-gray-100 dark:border-gray-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setCreateBlocks((prev) => prev.filter((b) => b.id !== block.id))}
+                        className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                        title="Delete image"
+                      >✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex gap-2 mt-1 justify-end shrink-0">
                 <button
@@ -827,7 +859,6 @@ function NotePanel({ notebook, resetSignal }) {
                       setCreateBlocks((prev) => [
                         ...prev,
                         { id: genId(), type: "image", file, localUrl: URL.createObjectURL(file) },
-                        { id: genId(), type: "text", value: "" },
                       ]);
                     });
                     e.target.value = "";
@@ -835,7 +866,7 @@ function NotePanel({ notebook, resetSignal }) {
                 />
                 <button
                   type="button"
-                  onClick={() => { setShowForm(false); setTitle(""); setCreateBlocks([{ id: genId(), type: "text", value: "" }]); }}
+                  onClick={() => { setShowForm(false); setTitle(""); setCreateEditorContent(""); setCreateBlocks([]); }}
                   className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
                 >
                   Cancel
@@ -868,7 +899,6 @@ function NotePanel({ notebook, resetSignal }) {
           >
 
             {/* ── VIEW MODE ── */}
-            {/* ── VIEW MODE ── */}
             {viewingNote && !editingNote && (() => {
               const layout = viewingNote.image_layout;
               const images = viewingNote.images || [];
@@ -892,9 +922,11 @@ function NotePanel({ notebook, resetSignal }) {
                     if (block.type === "text") {
                       if (!block.value?.trim()) return null;
                       return (
-                        <p key={`t-${idx}`} className={`whitespace-pre-wrap mb-1 ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}>
-                          {block.value}
-                        </p>
+                        <div
+                          key={`t-${idx}`}
+                          className={`rich-view mb-1 ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
+                          dangerouslySetInnerHTML={{ __html: toEditorContent(block.value) }}
+                        />
                       );
                     }
                     const img = images.find((i) => i.id === block.id);
@@ -950,50 +982,42 @@ function NotePanel({ notebook, resetSignal }) {
                   className={`w-full bg-transparent border-b border-blue-300 dark:border-blue-600 pb-1 mb-3 focus:outline-none ${fullscreen ? "text-lg font-bold text-gray-800 dark:text-gray-100" : "font-semibold text-gray-800 dark:text-gray-100 text-sm"}`}
                 />
 
-                {/* Block editor */}
-                <div className={fullscreen ? "flex-1 overflow-y-auto min-h-0" : ""}>
-                {editBlocks.map((block, idx) =>
-                  block.type === "text" ? (
-                    <textarea
-                      key={block.id}
-                      placeholder={idx === 0 ? "Write your note here..." : "Continue writing..."}
-                      value={block.value}
-                      rows={2}
-                      ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
-                      onChange={(e) => {
-                        e.target.style.height = "auto";
-                        e.target.style.height = e.target.scrollHeight + "px";
-                        setEditBlocks((prev) => prev.map((b) => b.id === block.id ? { ...b, value: e.target.value } : b));
-                      }}
-                      className={`w-full bg-transparent focus:outline-none resize-none overflow-hidden ${fullscreen ? "text-base text-gray-700 dark:text-gray-300" : "text-sm text-gray-600 dark:text-gray-300"}`}
-                    />
-                  ) : block.url ? (
-                    <div key={block.id} className="flex flex-wrap gap-3 mt-2 mb-2">
-                      <div
-                        className="relative group flex-shrink-0"
-                        style={{ width: imageMeta[block.imageId]?.width ? `${imageMeta[block.imageId].width}px` : "calc(50% - 6px)" }}
-                      >
-                        <img
-                          src={block.url}
-                          alt=""
-                          draggable={false}
-                          className="rounded-xl w-full h-auto border border-gray-100 dark:border-gray-800"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleImageDelete(block.imageId, editingNote.id)}
-                          className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
-                          title="Delete image"
-                        >✕</button>
+                {/* Rich text editor + image blocks */}
+                <div className={fullscreen ? "flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto" : "flex flex-col gap-3"}>
+                  <RichTextEditor
+                    content={editEditorContent}
+                    onChange={setEditEditorContent}
+                    minHeight={fullscreen ? "300px" : "120px"}
+                  />
+                  {editBlocks.filter((b) => b.type === "image" && b.url).length > 0 && (
+                    <div className="flex flex-wrap gap-3">
+                      {editBlocks.filter((b) => b.type === "image" && b.url).map((block) => (
                         <div
-                          onMouseDown={(e) => startResize(e, block.imageId, editingNote.id, editingNote.images)}
-                          className="absolute bottom-2 right-2 w-5 h-5 flex items-center justify-center cursor-se-resize opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-gray-800/90 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs select-none"
-                          title="Resize"
-                        >⤡</div>
-                      </div>
+                          key={block.id}
+                          className="relative group flex-shrink-0"
+                          style={{ width: imageMeta[block.imageId]?.width ? `${imageMeta[block.imageId].width}px` : "calc(50% - 6px)" }}
+                        >
+                          <img
+                            src={block.url}
+                            alt=""
+                            draggable={false}
+                            className="rounded-xl w-full h-auto border border-gray-100 dark:border-gray-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleImageDelete(block.imageId, editingNote.id)}
+                            className="absolute top-2 right-2 bg-black/60 hover:bg-red-600 text-white rounded-lg w-7 h-7 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                            title="Delete image"
+                          >✕</button>
+                          <div
+                            onMouseDown={(e) => startResize(e, block.imageId, editingNote.id, editingNote.images)}
+                            className="absolute bottom-2 right-2 w-5 h-5 flex items-center justify-center cursor-se-resize opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-gray-800/90 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-xs select-none"
+                            title="Resize"
+                          >⤡</div>
+                        </div>
+                      ))}
                     </div>
-                  ) : null
-                )}
+                  )}
                 </div>
 
                 <div className="flex gap-2 mt-3 justify-end shrink-0">
@@ -1013,7 +1037,7 @@ function NotePanel({ notebook, resetSignal }) {
                     onChange={(e) => { if (wasFullscreenRef.current) panelRef.current?.requestFullscreen(); handleImageUpload(e.target.files, editingNote.id); e.target.value = ""; }}
                   />
                   <button
-                    onClick={() => { setViewingNote(editingNote); setEditingNote(null); setEditBlocks([]); }}
+                    onClick={() => { setViewingNote(editingNote); setEditingNote(null); setEditBlocks([]); setEditEditorContent(""); }}
                     className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-3 py-1.5 rounded-lg transition"
                   >
                     Cancel
@@ -1076,8 +1100,8 @@ function NotePanel({ notebook, resetSignal }) {
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setViewingNote(note)}>
                       <h3 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{note.title}</h3>
                       {note.content && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2 whitespace-pre-wrap">
-                          {note.content}
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                          {htmlToText(note.content)}
                         </p>
                       )}
                     </div>
@@ -1094,7 +1118,13 @@ function NotePanel({ notebook, resetSignal }) {
                   {openMenuId === note.id && (
                     <div className="absolute right-4 top-10 z-20 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg py-1 min-w-[180px]">
                       <button
-                        onClick={() => { setEditBlocks(blocksFromNote(note)); setEditingNote(note); setOpenMenuId(null); }}
+                        onClick={() => {
+                          const imageBlocks = blocksFromNote(note).filter((b) => b.type === "image");
+                          setEditEditorContent(toEditorContent(note.content));
+                          setEditBlocks(imageBlocks);
+                          setEditingNote(note);
+                          setOpenMenuId(null);
+                        }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"
                       >
                         ✏️ <span>Edit</span>
