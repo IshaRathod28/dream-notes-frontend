@@ -591,7 +591,7 @@ function NotePanel({ notebook, resetSignal }) {
     <div ref={panelRef} className="flex flex-col h-full overflow-hidden bg-white dark:bg-gray-950">
 
       {/* Sticky top */}
-      <div className="shrink-0 px-8 pt-8 pb-2 bg-white dark:bg-gray-950">
+      <div className="shrink-0 px-4 pt-4 pb-2 sm:px-8 sm:pt-8 bg-white dark:bg-gray-950">
 
         {/* Notebook header */}
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
@@ -617,19 +617,21 @@ function NotePanel({ notebook, resetSignal }) {
 
         {/* Toolbar: create + search */}
         {!showForm && !inDetail && (
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <button
               onClick={() => { setViewingNote(null); setEditingNote(null); setShowForm(true); }}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors duration-150 shadow-sm shrink-0"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors duration-150 shadow-sm shrink-0"
             >
-              <span className="text-lg leading-none">+</span> Create Note
+              <span className="text-lg leading-none">+</span>
+              <span className="hidden sm:inline">Create Note</span>
+              <span className="sm:hidden">New</span>
             </button>
 
-            <div className="flex flex-1 items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
+            <div className="flex flex-1 min-w-[160px] items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
               <select
                 value={searchField}
                 onChange={(e) => setSearchField(e.target.value)}
-                className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-3 py-2.5 focus:outline-none cursor-pointer"
+                className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-2 sm:px-3 py-2.5 focus:outline-none cursor-pointer"
               >
                 <option value="both">Both</option>
                 <option value="title">Title</option>
@@ -640,7 +642,7 @@ function NotePanel({ notebook, resetSignal }) {
                 placeholder="Search notes..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
+                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none min-w-0"
               />
               {search && (
                 <button onClick={() => setSearch("")} className="px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
@@ -652,7 +654,7 @@ function NotePanel({ notebook, resetSignal }) {
             <select
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value)}
-              className="text-xs font-medium text-gray-500 dark:text-gray-300 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer shrink-0"
+              className="text-xs font-medium text-gray-500 dark:text-gray-300 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl px-2 sm:px-3 py-2.5 focus:outline-none cursor-pointer shrink-0"
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
@@ -663,7 +665,7 @@ function NotePanel({ notebook, resetSignal }) {
 
         {/* Bulk action bar */}
         {!showForm && !inDetail && selectedIds.length > 0 && (
-          <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl" ref={menuRef}>
+          <div className="flex flex-wrap items-center gap-2 mb-4 px-3 py-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl" ref={menuRef}>
             <input
               type="checkbox"
               checked={allSelected}
@@ -674,7 +676,7 @@ function NotePanel({ notebook, resetSignal }) {
             <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
               {selectedIds.length} selected
             </span>
-            <div className="flex items-center gap-2 ml-auto relative">
+            <div className="flex flex-wrap items-center gap-2 ml-auto relative">
               {otherNotebooks.length > 0 && (
                 <div className="relative">
                   <button
@@ -700,15 +702,15 @@ function NotePanel({ notebook, resetSignal }) {
               )}
               <button
                 onClick={() => { setExportFilename(""); setShowExportModal(true); }}
-                className="flex items-center gap-1.5 text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg transition"
+                className="flex items-center gap-1.5 text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition"
               >
-                📄 Export PDF
+                📄 <span className="hidden sm:inline">Export PDF</span><span className="sm:hidden">PDF</span>
               </button>
               <button
                 onClick={handleBulkDelete}
-                className="flex items-center gap-1.5 text-sm bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg transition"
+                className="flex items-center gap-1.5 text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg transition"
               >
-                🗑️ Delete
+                🗑️ <span className="hidden sm:inline">Delete</span>
               </button>
               <button
                 onClick={() => { setSelectionMode(false); setSelectedIds([]); setShowBulkMove(false); }}
@@ -749,7 +751,7 @@ function NotePanel({ notebook, resetSignal }) {
         )}
 
       </div>
-      <div className={`flex-1 px-8 pb-8 ${fullscreen && showForm ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+      <div className={`flex-1 px-4 pb-4 sm:px-8 sm:pb-8 ${fullscreen && showForm ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
 
         {/* Create form */}
         {showForm && (
