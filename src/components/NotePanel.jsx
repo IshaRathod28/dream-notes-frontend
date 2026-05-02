@@ -12,6 +12,8 @@ function NotePanel({ notebook, resetSignal }) {
   const [allNotebooks, setAllNotebooks] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [showMoveOptions, setShowMoveOptions] = useState(false);
+  const [showPlaceAfter, setShowPlaceAfter] = useState(false);
+  const [placeAfterSearch, setPlaceAfterSearch] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkMove, setShowBulkMove] = useState(false);
@@ -102,7 +104,7 @@ function NotePanel({ notebook, resetSignal }) {
       }
     };
     if (openMenuId) document.addEventListener("mousedown", handleClickOutside);
-    else setShowMoveOptions(false);
+    else { setShowMoveOptions(false); setShowPlaceAfter(false); setPlaceAfterSearch(""); }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenuId]);
 
@@ -303,6 +305,25 @@ function NotePanel({ notebook, resetSignal }) {
       setOpenMenuId(null);
     } catch (error) {
       console.error("Failed to move note:", error);
+    }
+  };
+
+  const handlePlaceAfter = async (noteId, afterId) => {
+    const reordered = [...notes];
+    const fromIdx = reordered.findIndex((n) => n.id === noteId);
+    const [moved] = reordered.splice(fromIdx, 1);
+    // afterId null means place at top
+    const insertAt = afterId === null ? 0 : reordered.findIndex((n) => n.id === afterId) + 1;
+    reordered.splice(insertAt, 0, moved);
+    setNotes(reordered);
+    setSortMode("custom");
+    setOpenMenuId(null);
+    setShowPlaceAfter(false);
+    try {
+      await reorderNotes(notebook.id, reordered.map((n) => n.id));
+    } catch (err) {
+      console.error("Failed to place note:", err);
+      fetchNotes();
     }
   };
 
@@ -1084,6 +1105,54 @@ function NotePanel({ notebook, resetSignal }) {
                                   📓 <span className="truncate">{nb.name}</span>
                                 </button>
                               ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {sortMode === "custom" && (
+                        <>
+                          <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
+                          <button
+                            onClick={() => { setShowPlaceAfter((v) => !v); setShowMoveOptions(false); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center justify-between gap-2"
+                          >
+                            <span className="flex items-center gap-2">📌 Place After</span>
+                            <span className="text-gray-400 dark:text-gray-500 text-xs">{showPlaceAfter ? "▲" : "▼"}</span>
+                          </button>
+                          {showPlaceAfter && (
+                            <div className="px-3 pb-2 flex flex-col gap-0.5">
+                              <input
+                                autoFocus
+                                type="text"
+                                placeholder="Search notes..."
+                                value={placeAfterSearch}
+                                onChange={(e) => setPlaceAfterSearch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full text-xs border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg px-3 py-1.5 mb-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              />
+                              <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
+                                <button
+                                  onClick={() => handlePlaceAfter(note.id, null)}
+                                  className="w-full text-left text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-3 py-2 rounded-lg transition flex items-center gap-2 font-medium shrink-0"
+                                >
+                                  ⬆ Place at top
+                                </button>
+                                {notes
+                                  .filter((n) => n.id !== note.id && n.title.toLowerCase().includes(placeAfterSearch.toLowerCase()))
+                                  .map((n) => (
+                                    <button
+                                      key={n.id}
+                                      onClick={() => handlePlaceAfter(note.id, n.id)}
+                                      className="w-full text-left text-xs text-gray-600 dark:text-gray-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-3 py-2 rounded-lg transition"
+                                    >
+                                      <span className="truncate block">After: {n.title}</span>
+                                    </button>
+                                  ))}
+                                {notes.filter((n) => n.id !== note.id && n.title.toLowerCase().includes(placeAfterSearch.toLowerCase())).length === 0 && placeAfterSearch && (
+                                  <p className="text-xs text-gray-400 dark:text-gray-500 px-3 py-2">No notes found</p>
+                                )}
+                              </div>
                             </div>
                           )}
                         </>
