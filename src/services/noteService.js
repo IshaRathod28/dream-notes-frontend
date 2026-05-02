@@ -40,6 +40,10 @@ export const bulkMoveNotes = async (notebookId, noteIds, targetNotebookId) => {
   });
 };
 
+export const reorderNotes = async (notebookId, orderedIds) => {
+  await api.patch(`/notebooks/${notebookId}/notes/reorder`, { ordered_ids: orderedIds });
+};
+
 export const saveImageLayout = async (notebookId, noteId, layout) => {
   const response = await api.patch(`/notebooks/${notebookId}/notes/${noteId}/update_image_layout`, {
     image_layout: layout,

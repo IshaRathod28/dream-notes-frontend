@@ -8,6 +8,7 @@ import NotePanel from "./components/NotePanel";
 function AppInner() {
   const { isLoggedIn, user, logout, updateTheme } = useAuth();
   const [selectedNotebook, setSelectedNotebook] = useState(null);
+  const [notePanelResetSignal, setNotePanelResetSignal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [dark, setDark] = useState(() => {
     const savedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -26,6 +27,14 @@ function AppInner() {
     const newDark = !dark;
     setDark(newDark);
     if (isLoggedIn) await updateTheme(newDark ? "dark" : "light");
+  };
+
+  const handleSelectNotebook = (notebook) => {
+    if (selectedNotebook?.id === notebook.id) {
+      setNotePanelResetSignal((s) => s + 1);
+    } else {
+      setSelectedNotebook(notebook);
+    }
   };
 
   const refresh = () => {
@@ -75,7 +84,7 @@ function AppInner() {
               <NotebookList
                 key={refreshKey}
                 selectedId={selectedNotebook?.id}
-                onSelect={setSelectedNotebook}
+                onSelect={handleSelectNotebook}
                 onRefresh={refresh}
               />
             </div>
@@ -85,7 +94,7 @@ function AppInner() {
           <div className="col-span-8 min-w-0 overflow-hidden">
             <div className="bg-white dark:bg-gray-950 rounded-2xl shadow-md h-full flex flex-col overflow-hidden min-h-0">
               {selectedNotebook ? (
-                <NotePanel notebook={selectedNotebook} />
+                <NotePanel notebook={selectedNotebook} resetSignal={notePanelResetSignal} />
               ) : (
                 <div className="flex items-center justify-center flex-1">
                   <div className="text-center">
