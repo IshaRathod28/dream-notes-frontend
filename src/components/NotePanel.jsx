@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes, uploadImages, deleteImage, saveImageLayout } from "../services/noteService";
+import { getNotes, createNote, updateNote, deleteNote, moveNote, bulkDeleteNotes, bulkMoveNotes, uploadImages, deleteImage, saveImageLayout, reorderNotes } from "../services/noteService";
 import { getNotebooks } from "../services/notebookService";
 
-function NotePanel({ notebook }) {
+function NotePanel({ notebook, resetSignal }) {
   const [notes, setNotes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -15,6 +15,7 @@ function NotePanel({ notebook }) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkMove, setShowBulkMove] = useState(false);
+  const [sortMode, setSortMode] = useState("newest");
   const [fullscreen, setFullscreen] = useState(false);
   const [viewingNote, setViewingNote] = useState(null);
   const [imageMeta, setImageMeta] = useState({});
@@ -28,6 +29,8 @@ function NotePanel({ notebook }) {
   const createFileInputRef = useRef(null);
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
+  const dragNoteItem = useRef(null);
+  const dragNoteOverItem = useRef(null);
   const wasFullscreenRef = useRef(false);
 
   useEffect(() => {
@@ -45,6 +48,14 @@ function NotePanel({ notebook }) {
   }, [editingNote?.id]);
 
   useEffect(() => {
+    if (!resetSignal) return;
+    setViewingNote(null);
+    setEditingNote(null);
+    setEditBlocks([]);
+    setShowForm(false);
+  }, [resetSignal]);
+
+  useEffect(() => {
     fetchNotes();
     setEditingNote(null);
     setEditBlocks([]);
@@ -59,6 +70,7 @@ function NotePanel({ notebook }) {
     setShowBulkMove(false);
     setFullscreen(false);
     setViewingNote(null);
+    setSortMode("newest");
   }, [notebook.id]);
 
   useEffect(() => {
@@ -101,6 +113,12 @@ function NotePanel({ notebook }) {
     if (searchField === "content") return (n.content || "").toLowerCase().includes(q);
     return n.title.toLowerCase().includes(q) || (n.content || "").toLowerCase().includes(q);
   });
+
+  const displayedNotes = (() => {
+    if (sortMode === "newest") return [...filteredNotes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    if (sortMode === "oldest") return [...filteredNotes].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    return filteredNotes; // custom — server position order
+  })();
 
   const genId = () => Math.random().toString(36).slice(2, 9);
 
@@ -150,6 +168,37 @@ function NotePanel({ notebook }) {
       setNotes(data.map(normalizeNote));
     } catch (error) {
       console.error("Failed to fetch notes:", error);
+    }
+  };
+
+  const handleNoteDragStart = (e, noteId) => {
+    dragNoteItem.current = noteId;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleNoteDragOver = (e, noteId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    dragNoteOverItem.current = noteId;
+  };
+
+  const handleNoteDrop = async (e) => {
+    e.preventDefault();
+    if (!dragNoteItem.current || dragNoteItem.current === dragNoteOverItem.current) return;
+    const fromIdx = notes.findIndex((n) => n.id === dragNoteItem.current);
+    const toIdx = notes.findIndex((n) => n.id === dragNoteOverItem.current);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const reordered = [...notes];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setNotes(reordered);
+    dragNoteItem.current = null;
+    dragNoteOverItem.current = null;
+    try {
+      await reorderNotes(notebook.id, reordered.map((n) => n.id));
+    } catch (err) {
+      console.error("Failed to reorder notes:", err);
+      fetchNotes();
     }
   };
 
@@ -212,7 +261,7 @@ function NotePanel({ notebook }) {
           meta: {}, order: note.images.map((img) => img.id), blocks: blockLayout,
         }));
       }
-      setNotes([note, ...notes]);
+      setNotes(sortMode === "custom" ? [...notes, note] : [note, ...notes]);
       setTitle("");
       setCreateBlocks([{ id: genId(), type: "text", value: "" }]);
       setShowForm(false);
@@ -506,7 +555,11 @@ function NotePanel({ notebook }) {
         {/* Notebook header */}
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
           <span className="text-2xl">📓</span>
-          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 truncate">{notebook.name}</h2>
+          <h2
+            className={`text-xl font-bold text-gray-800 dark:text-gray-100 truncate ${inDetail ? "cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" : ""}`}
+            onClick={() => { if (inDetail) { setViewingNote(null); setEditingNote(null); } }}
+            title={inDetail ? "Back to notes" : undefined}
+          >{notebook.name}</h2>
           <div className="ml-auto flex items-center gap-3 shrink-0">
             <span className="text-xs text-gray-400 dark:text-gray-500">
               {notes.length} note{notes.length !== 1 ? "s" : ""}
@@ -531,31 +584,39 @@ function NotePanel({ notebook }) {
               <span className="text-lg leading-none">+</span> Create Note
             </button>
 
-            {!inDetail && (
-              <div className="flex flex-1 items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
-                <select
-                  value={searchField}
-                  onChange={(e) => setSearchField(e.target.value)}
-                  className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-3 py-2.5 focus:outline-none cursor-pointer"
-                >
-                  <option value="both">Both</option>
-                  <option value="title">Title</option>
-                  <option value="content">Content</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Search notes..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
-                />
-                {search && (
-                  <button onClick={() => setSearch("")} className="px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-                    ✕
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="flex flex-1 items-center border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 transition">
+              <select
+                value={searchField}
+                onChange={(e) => setSearchField(e.target.value)}
+                className="bg-gray-100 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-300 px-3 py-2.5 focus:outline-none cursor-pointer"
+              >
+                <option value="both">Both</option>
+                <option value="title">Title</option>
+                <option value="content">Content</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Search notes..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="px-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value)}
+              className="text-xs font-medium text-gray-500 dark:text-gray-300 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer shrink-0"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="custom">Custom Order</option>
+            </select>
           </div>
         )}
 
@@ -935,21 +996,30 @@ function NotePanel({ notebook }) {
                 <p className="text-4xl mb-3">📝</p>
                 <p className="text-gray-400 dark:text-gray-500 text-sm">No notes yet. Create your first one above!</p>
               </div>
-            ) : filteredNotes.length === 0 ? (
+            ) : displayedNotes.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-gray-400 dark:text-gray-500 text-sm">No notes match "{search}"</p>
               </div>
             ) : (
-              filteredNotes.map((note) => (
+              displayedNotes.map((note) => (
                 <div
                   key={note.id}
+                  draggable={sortMode === "custom" && !search}
+                  onDragStart={(e) => handleNoteDragStart(e, note.id)}
+                  onDragOver={(e) => handleNoteDragOver(e, note.id)}
+                  onDrop={handleNoteDrop}
                   className={`relative border rounded-2xl p-4 transition ${
+                    sortMode === "custom" && !search ? "cursor-grab active:cursor-grabbing" : ""
+                  } ${
                     selectedIds.includes(note.id)
                       ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20"
                       : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
                   }`}
                 >
                   <div className="flex items-start gap-3">
+                    {sortMode === "custom" && !search && (
+                      <div className="mt-1 text-gray-300 dark:text-gray-600 shrink-0 select-none text-base leading-none">⠿</div>
+                    )}
                     {selectionMode && (
                       <input
                         type="checkbox"
