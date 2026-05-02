@@ -18,6 +18,8 @@ function NotePanel({ notebook, resetSignal }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showBulkMove, setShowBulkMove] = useState(false);
   const [sortMode, setSortMode] = useState("newest");
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFilename, setExportFilename] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
   const [viewingNote, setViewingNote] = useState(null);
   const [imageMeta, setImageMeta] = useState({});
@@ -450,6 +452,21 @@ function NotePanel({ notebook, resetSignal }) {
     if (files.length) handleImageUpload(files, noteId);
   };
 
+  const cleanForPDF = (str) =>
+    str
+      .replace(/\p{Extended_Pictographic}/gu, "")
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+      .replace(/→|➜|➡/g, "->")
+      .replace(/←/g, "<-")
+      .replace(/[""]/g, '"')
+      .replace(/['']/g, "'")
+      .replace(/—/g, "--")
+      .replace(/–/g, "-")
+      .replace(/•/g, "-")
+      .replace(/[^\x00-\xFF]/g, "")
+      .replace(/[^\S\n]+/g, " ")
+      .trim();
+
   const handleExportPDF = async () => {
     const { jsPDF } = await import("jspdf");
 
@@ -497,20 +514,20 @@ function NotePanel({ notebook, resetSignal }) {
       const note = selectedNotes[i];
 
       if (i !== 0) {
-        addPageIfNeeded(15);
-        y += 5;
-        doc.setDrawColor(200);
+        addPageIfNeeded(10);
+        y += 1;
+        doc.setDrawColor(220);
         doc.line(margin, y, pageW - margin, y);
-        y += 8;
+        y += 6;
       }
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      const titleLines = doc.splitTextToSize(note.title, maxWidth);
-      const titleLineH = 7;
+      doc.setFontSize(13);
+      const titleLines = doc.splitTextToSize(cleanForPDF(note.title), maxWidth);
+      const titleLineH = 6.5;
       addPageIfNeeded(titleLines.length * titleLineH);
       doc.text(titleLines, margin, y);
-      y += titleLines.length * titleLineH + 4;
+      y += titleLines.length * titleLineH + 3;
 
       const layout = note.image_layout;
       const images = note.images || [];
@@ -523,10 +540,10 @@ function NotePanel({ notebook, resetSignal }) {
 
       for (const block of blocks) {
         if (block.type === "text" && block.value?.trim()) {
-          doc.setFont("courier", "normal");
+          doc.setFont("helvetica", "normal");
           doc.setFontSize(11);
-          const lines = doc.splitTextToSize(block.value, maxWidth);
-          const lineH = 5.5;
+          const lines = doc.splitTextToSize(cleanForPDF(block.value), maxWidth - 2);
+          const lineH = 6;
 
           let remaining = [...lines];
           while (remaining.length > 0) {
@@ -537,7 +554,7 @@ function NotePanel({ notebook, resetSignal }) {
             y += chunk.length * lineH;
             if (remaining.length > 0) { doc.addPage(); y = margin; }
           }
-          y += 4;
+          y += 1;
         } else if (block.type === "image") {
           const imgObj = images.find((im) => im.id === block.id);
           if (!imgObj?.url) continue;
@@ -561,7 +578,10 @@ function NotePanel({ notebook, resetSignal }) {
       }
     }
 
-    doc.save("notes-export.pdf");
+    const finalName = (exportFilename.trim() || "notes-export") + ".pdf";
+    doc.save(finalName);
+    setShowExportModal(false);
+    setExportFilename("");
   };
   const otherNotebooks = allNotebooks.filter((nb) => nb.id !== notebook.id);
   const allSelected = filteredNotes.length > 0 && selectedIds.length === filteredNotes.length;
@@ -679,7 +699,7 @@ function NotePanel({ notebook, resetSignal }) {
                 </div>
               )}
               <button
-                onClick={handleExportPDF}
+                onClick={() => { setExportFilename(""); setShowExportModal(true); }}
                 className="flex items-center gap-1.5 text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg transition"
               >
                 📄 Export PDF
@@ -1174,6 +1194,42 @@ function NotePanel({ notebook, resetSignal }) {
         )}
 
       </div>{/* end scrollable content */}
+
+      {/* Export PDF filename modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-gray-200 dark:border-gray-700">
+            <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Export as PDF</h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">File ka naam likho, <span className="font-medium text-gray-500 dark:text-gray-400">.pdf</span> automatically add ho jaayega</p>
+            <div className="flex items-center border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-400 bg-gray-50 dark:bg-gray-800 mb-4">
+              <input
+                autoFocus
+                type="text"
+                placeholder="notes-export"
+                value={exportFilename}
+                onChange={(e) => setExportFilename(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleExportPDF(); if (e.key === "Escape") setShowExportModal(false); }}
+                className="flex-1 bg-transparent px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none"
+              />
+              <span className="pr-4 text-sm text-gray-400 dark:text-gray-500 select-none">.pdf</span>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-4 py-2 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExportPDF}
+                className="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold px-5 py-2 rounded-xl transition"
+              >
+                📄 Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
