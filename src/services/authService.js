@@ -13,10 +13,10 @@ export const login = async (email, password) => {
   return { token, user: res.data.user };
 };
 
-export const register = async (email, password) => {
+export const register = async (email, password, name) => {
   const res = await axios.post(
     `${BASE}/users`,
-    { user: { email, password, password_confirmation: password } },
+    { user: { email, password, password_confirmation: password, name } },
     { headers }
   );
   const token = res.headers["authorization"]?.replace("Bearer ", "");
