@@ -73,6 +73,7 @@ function NotePanel({ notebook, resetSignal }) {
   const [editBlocks, setEditBlocks] = useState([]);
   const [createEditorContent, setCreateEditorContent] = useState("");
   const [editEditorContent, setEditEditorContent] = useState("");
+  const [filterDate, setFilterDate] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -130,6 +131,7 @@ function NotePanel({ notebook, resetSignal }) {
     setSortMode("newest");
     setShowHistory(false);
     setHistoryItems([]);
+    setFilterDate("");
   }, [notebook.id]);
 
   useEffect(() => {
@@ -167,11 +169,19 @@ function NotePanel({ notebook, resetSignal }) {
 
   const filteredNotes = notes.filter((n) => {
     const q = search.toLowerCase();
-    if (!q) return true;
-    const contentText = htmlToText(n.content || "");
-    if (searchField === "title") return n.title.toLowerCase().includes(q);
-    if (searchField === "content") return contentText.toLowerCase().includes(q);
-    return n.title.toLowerCase().includes(q) || contentText.toLowerCase().includes(q);
+    if (q) {
+      const contentText = htmlToText(n.content || "");
+      const matchesSearch =
+        searchField === "title" ? n.title.toLowerCase().includes(q) :
+        searchField === "content" ? contentText.toLowerCase().includes(q) :
+        n.title.toLowerCase().includes(q) || contentText.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
+    if (filterDate) {
+      const noteDate = new Date(n.created_at).toLocaleDateString("en-CA");
+      if (noteDate !== filterDate) return false;
+    }
+    return true;
   });
 
   const displayedNotes = (() => {
@@ -669,7 +679,11 @@ function NotePanel({ notebook, resetSignal }) {
           >{notebook.name}</h2>
           <div className="ml-auto flex items-center gap-3 shrink-0">
             <span className="text-xs text-gray-400 dark:text-gray-500">
-              {notes.length} note{notes.length !== 1 ? "s" : ""}
+              {(search || filterDate) ? (
+                <>{filteredNotes.length} <span className="text-gray-300 dark:text-gray-600">/ {notes.length}</span> note{notes.length !== 1 ? "s" : ""}</>
+              ) : (
+                <>{notes.length} note{notes.length !== 1 ? "s" : ""}</>
+              )}
             </span>
             <button
               onClick={toggleFullscreen}
@@ -726,6 +740,23 @@ function NotePanel({ notebook, resetSignal }) {
               <option value="oldest">Oldest First</option>
               <option value="custom">Custom Order</option>
             </select>
+
+            <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl overflow-hidden shrink-0 focus-within:ring-2 focus-within:ring-blue-400 transition">
+              <span className="pl-2.5 text-gray-400 dark:text-gray-500 text-xs select-none">📅</span>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="text-xs text-gray-600 dark:text-gray-300 bg-transparent px-2 py-2.5 focus:outline-none cursor-pointer"
+              />
+              {filterDate && (
+                <button
+                  onClick={() => setFilterDate("")}
+                  className="pr-2.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
+                  title="Clear date filter"
+                >✕</button>
+              )}
+            </div>
           </div>
         )}
 
