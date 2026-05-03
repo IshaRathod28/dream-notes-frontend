@@ -9,6 +9,7 @@ function AppInner() {
   const { isLoggedIn, user, logout, updateTheme } = useAuth();
   const [selectedNotebook, setSelectedNotebook] = useState(null);
   const [notePanelResetSignal, setNotePanelResetSignal] = useState(0);
+  const [pendingOpenNoteId, setPendingOpenNoteId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
@@ -50,6 +51,12 @@ function AppInner() {
     } else {
       setSelectedNotebook(notebook);
     }
+  };
+
+  const handleNavigateToNote = (notebook, noteId) => {
+    if (isMobile) setSidebarOpen(false);
+    setSelectedNotebook(notebook);
+    setPendingOpenNoteId(noteId);
   };
 
   const startResize = (e) => {
@@ -177,7 +184,13 @@ function AppInner() {
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="bg-white dark:bg-gray-950 rounded-2xl shadow-md h-full flex flex-col overflow-hidden min-h-0">
               {selectedNotebook ? (
-                <NotePanel notebook={selectedNotebook} resetSignal={notePanelResetSignal} />
+                <NotePanel
+                  notebook={selectedNotebook}
+                  resetSignal={notePanelResetSignal}
+                  pendingOpenNoteId={pendingOpenNoteId}
+                  onNavigateToNote={handleNavigateToNote}
+                  onPendingNoteOpened={() => setPendingOpenNoteId(null)}
+                />
               ) : (
                 <div className="flex items-center justify-center flex-1 px-4">
                   <div className="text-center">
