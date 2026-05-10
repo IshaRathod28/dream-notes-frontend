@@ -1,7 +1,9 @@
 import axios from "axios";
-
-const BASE = "http://localhost:3005/api/v1";
-const headers = { "Content-Type": "application/json", Accept: "application/json" };
+//authService.js
+const BASE =
+  import.meta.env.MODE === "development"
+    ? "http://localhost:3005/api/v1"
+    : import.meta.env.VITE_API_URL + "/api/v1";const headers = { "Content-Type": "application/json", Accept: "application/json" };
 
 export const login = async (email, password) => {
   const res = await axios.post(
