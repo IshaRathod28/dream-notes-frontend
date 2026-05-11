@@ -40,6 +40,11 @@ export const bulkMoveNotes = async (notebookId, noteIds, targetNotebookId) => {
   });
 };
 
+export const globalSearch = async (query) => {
+  const response = await api.get("/notes/search", { params: { q: query } });
+  return response.data;
+};
+
 export const reorderNotes = async (notebookId, orderedIds) => {
   await api.patch(`/notebooks/${notebookId}/notes/reorder`, { ordered_ids: orderedIds });
 };

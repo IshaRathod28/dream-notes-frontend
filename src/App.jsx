@@ -4,6 +4,7 @@ import AuthPage from "./pages/AuthPage";
 import NotebookList from "./components/NotebookList";
 import CreateNotebook from "./components/CreateNotebook";
 import NotePanel from "./components/NotePanel";
+import GlobalSearch from "./components/GlobalSearch";
 
 function AppInner() {
   const { isLoggedIn, user, logout, updateTheme } = useAuth();
@@ -105,6 +106,7 @@ function AppInner() {
           <p className="text-gray-400 dark:text-gray-500 text-xs hidden sm:inline">Organize your notebooks and notes beautifully</p>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
+          <GlobalSearch onNavigate={handleNavigateToNote} />
           <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400 hidden sm:inline truncate max-w-[160px]">{user?.email}</span>
           <button
             onClick={logout}
