@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import { Color } from "@tiptap/extension-color";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
@@ -242,7 +241,6 @@ export default function RichTextEditor({ content, onChange, minHeight = "120px",
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
       TextStyle,
       FontSize,
       Color,
