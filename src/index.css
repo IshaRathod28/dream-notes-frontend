@@ -20,6 +20,12 @@
 .rich-editor .ProseMirror li { margin-bottom: 0.2em; }
 .rich-editor .ProseMirror blockquote { border-left: 4px solid #3b82f6; padding-left: 1em; color: #6b7280; font-style: italic; margin: 0.6em 0; background: rgba(59,130,246,0.05); border-radius: 0 4px 4px 0; padding-top: 0.25em; padding-bottom: 0.25em; }
 .rich-editor .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; float: left; height: 0; }
+.rich-editor .ProseMirror strong { font-weight: 700; }
+.rich-editor .ProseMirror em { font-style: italic; }
+.rich-editor .ProseMirror u { text-decoration: underline; }
+.rich-editor .ProseMirror s { text-decoration: line-through; }
+.rich-editor .ProseMirror mark { border-radius: 2px; padding: 0 1px; }
+.rich-editor .ProseMirror code { font-family: monospace; background: rgba(0,0,0,0.07); border-radius: 3px; padding: 0 3px; font-size: 0.9em; }
 
 /* ── Rich text view mode styles ── */
 .rich-view h1 { font-size: 2em; font-weight: 700; margin-bottom: 0.3em; line-height: 1.2; }
@@ -34,3 +40,9 @@
 .rich-view ol ol ol { list-style: lower-roman; }
 .rich-view li { margin-bottom: 0.2em; }
 .rich-view blockquote { border-left: 4px solid #3b82f6; padding-left: 1em; color: #6b7280; font-style: italic; margin: 0.6em 0; background: rgba(59,130,246,0.05); border-radius: 0 4px 4px 0; padding-top: 0.25em; padding-bottom: 0.25em; }
+.rich-view strong { font-weight: 700; }
+.rich-view em { font-style: italic; }
+.rich-view u { text-decoration: underline; }
+.rich-view s { text-decoration: line-through; }
+.rich-view mark { border-radius: 2px; padding: 0 1px; }
+.rich-view code { font-family: monospace; background: rgba(0,0,0,0.07); border-radius: 3px; padding: 0 3px; font-size: 0.9em; }
